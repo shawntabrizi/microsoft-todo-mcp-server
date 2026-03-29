@@ -39,10 +39,12 @@ The following fixes and features were pulled from open PRs and community forks:
 - **30 MCP Tools** covering lists, tasks, checklist items, attachments, linked resources, and bulk operations
 - **Automatic Token Refresh** with JWT expiry decoding and 5-minute buffer
 - **Request Deduplication** prevents duplicate task creation when tools are double-invoked
-- **OAuth 2.0 Authentication** via MSAL with configurable tenant support
-- **Delta Queries** for efficient change tracking
+- **OAuth 2.0 Authentication** via MSAL with CSRF state verification, loopback-only binding
+- **Delta Queries** for efficient change tracking with URL validation to prevent token exfiltration
 - **Recurring Task Support** including skip-to-current and proper recurrence PATCH handling
+- **Safe Multi-step Operations** — move-task, reorganize-list, and archive skip deletions on partial failure
 - **Full Metadata** display including timestamps, recurrence patterns, categories, and linked resources
+- **Restrictive File Permissions** — tokens and config files written with 0600 mode
 - **TypeScript + ESM** with strict typing and Zod schema validation
 
 ## Prerequisites
@@ -267,6 +269,16 @@ src/
 - **401 auto-retry**: Transparent token refresh on authentication failures
 - **Recurring task handling**: Temporarily clears recurrence before date updates to work around Graph API limitations
 - **Delta queries**: Efficient change tracking without re-fetching entire lists
+
+### Security Hardening
+
+- **Delta URL validation**: `deltaUrl` parameters are validated against `https://graph.microsoft.com/` to prevent bearer token exfiltration to arbitrary hosts
+- **OAuth CSRF protection**: Auth flow generates a cryptographic `state` parameter and verifies it on callback
+- **Loopback-only auth server**: Binds to `127.0.0.1` instead of all interfaces
+- **Minimal logging**: MSAL set to Warning level with PII disabled; Graph API helper does not log request/response bodies or headers
+- **Restrictive file permissions**: All token and config files written with `0600` (owner read/write only)
+- **Safe multi-step operations**: `move-task` skips source deletion if checklist copies fail; `reorganize-list` only deletes tasks that were successfully reorganized
+- **DELETE error propagation**: DELETE failures throw instead of returning silent null, so callers report actual errors
 
 ## Limitations
 
