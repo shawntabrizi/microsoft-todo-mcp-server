@@ -58,7 +58,7 @@ CLIENT_SECRET=${clientSecret}
 TENANT_ID=${tenantId}
 REDIRECT_URI=http://localhost:${process.env.AUTH_PORT || "3000"}/callback
 `
-    writeFileSync(".env", envContent)
+    writeFileSync(".env", envContent, { mode: 0o600 })
     console.log("✅ Created .env file")
   }
 

@@ -2691,7 +2691,8 @@ server.tool(
       }
 
       let successCount = 0
-      let failedTasks: string[] = []
+      let failedCopy: string[] = []
+      let failedDelete: string[] = []
 
       for (const task of tasksToArchive) {
         try {
@@ -2715,14 +2716,20 @@ server.tool(
             },
           )
 
-          if (createResponse) {
+          if (!createResponse) {
+            failedCopy.push(task.title)
+            continue
+          }
+
+          // Only delete source after successful copy
+          try {
             await makeGraphRequest(`${MS_GRAPH_BASE}/me/todo/lists/${sourceListId}/tasks/${task.id}`, token, "DELETE")
             successCount++
-          } else {
-            failedTasks.push(task.title)
+          } catch {
+            failedDelete.push(task.title)
           }
         } catch (error) {
-          failedTasks.push(task.title)
+          failedCopy.push(task.title)
         }
       }
 
@@ -2730,9 +2737,16 @@ server.tool(
       result += `Successfully archived ${successCount} of ${tasksToArchive.length} tasks\n`
       result += `Tasks completed before ${cutoffDate.toLocaleDateString()} were moved.\n`
 
-      if (failedTasks.length > 0) {
-        result += `\nFailed to archive ${failedTasks.length} tasks:\n`
-        failedTasks.forEach((title) => {
+      if (failedCopy.length > 0) {
+        result += `\nFailed to copy ${failedCopy.length} tasks:\n`
+        failedCopy.forEach((title) => {
+          result += `- ${title}\n`
+        })
+      }
+
+      if (failedDelete.length > 0) {
+        result += `\nCopied but failed to delete source (duplicates exist in both lists):\n`
+        failedDelete.forEach((title) => {
           result += `- ${title}\n`
         })
       }
