@@ -36,7 +36,7 @@ The following fixes and features were pulled from open PRs and community forks:
 
 ## Features
 
-- **30 MCP Tools** covering lists, tasks, checklist items, attachments, linked resources, and bulk operations
+- **33 MCP Tools** covering lists, tasks, checklist items, attachments, linked resources, and bulk operations
 - **Automatic Token Refresh** with JWT expiry decoding and 5-minute buffer
 - **Request Deduplication** prevents duplicate task creation when tools are double-invoked
 - **OAuth 2.0 Authentication** via MSAL with CSRF state verification, loopback-only binding
@@ -218,11 +218,12 @@ pnpm run format        # Format code with Prettier
 | `move-task`            | Move a task between lists, preserving checklist items and metadata                                                                |
 | `skip-task-to-current` | Advance a recurring task to the next occurrence on or after today                                                                 |
 
-### Checklist Items / Subtasks (4 tools)
+### Checklist Items / Subtasks (5 tools)
 
 | Tool                    | Description                                              |
 | ----------------------- | -------------------------------------------------------- |
-| `get-checklist-items`   | Get subtasks for a specific task                         |
+| `get-checklist-items`   | Get all subtasks for a specific task                     |
+| `get-checklist-item`    | Get a single subtask by ID                               |
 | `create-checklist-item` | Add a subtask with optional checked state and timestamps |
 | `update-checklist-item` | Update subtask text, completion status, or timestamps    |
 | `delete-checklist-item` | Remove a specific subtask                                |
@@ -237,12 +238,15 @@ pnpm run format        # Format code with Prettier
 | `create-attachment-upload-session` | Create an upload session for large files         |
 | `delete-attachment`                | Remove a file attachment                         |
 
-### Linked Resources (2 tools)
+### Linked Resources (5 tools)
 
 | Tool                     | Description                                                 |
 | ------------------------ | ----------------------------------------------------------- |
-| `get-linked-resources`   | Get linked resources for a task                             |
+| `get-linked-resources`   | Get all linked resources for a task                         |
+| `get-linked-resource`    | Get a single linked resource by ID                          |
 | `create-linked-resource` | Link an external resource (URL, app, external ID) to a task |
+| `update-linked-resource` | Update an existing linked resource                          |
+| `delete-linked-resource` | Remove a linked resource from a task                        |
 
 ### Bulk Operations (3 tools)
 
@@ -255,7 +259,7 @@ pnpm run format        # Format code with Prettier
 
 ```
 src/
-  todo-index.ts        # Core MCP server with all 30 tools
+  todo-index.ts        # Core MCP server with all 33 tools
   cli.ts               # CLI entry point with token loading
   token-manager.ts     # Token storage, refresh, and JWT decoding
   auth-server.ts       # Express OAuth 2.0 server

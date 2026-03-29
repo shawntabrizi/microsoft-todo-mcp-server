@@ -2124,6 +2124,149 @@ server.tool(
   },
 )
 
+server.tool(
+  "get-linked-resource",
+  "Get a single linked resource by ID for a Microsoft Todo task.",
+  {
+    listId: z.string().describe("ID of the task list"),
+    taskId: z.string().describe("ID of the task"),
+    linkedResourceId: z.string().describe("ID of the linked resource"),
+  },
+  async ({ listId, taskId, linkedResourceId }) => {
+    try {
+      const token = await getAccessToken()
+      if (!token) {
+        return {
+          content: [{ type: "text", text: "Failed to authenticate with Microsoft API" }],
+        }
+      }
+
+      const resource = await makeGraphRequest<LinkedResource>(
+        `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}/linkedResources/${linkedResourceId}`,
+        token,
+      )
+
+      if (!resource) {
+        return {
+          content: [{ type: "text", text: `Failed to retrieve linked resource: ${linkedResourceId}` }],
+        }
+      }
+
+      const details = [`ID: ${resource.id || "Unknown"}`, `Display Name: ${resource.displayName || "Unknown"}`]
+      if (resource.applicationName) details.push(`Application: ${resource.applicationName}`)
+      if (resource.webUrl) details.push(`URL: ${resource.webUrl}`)
+      if (resource.externalId) details.push(`External ID: ${resource.externalId}`)
+
+      return {
+        content: [{ type: "text", text: `Linked resource details:\n\n${details.join("\n")}` }],
+      }
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `Error fetching linked resource: ${error}` }],
+      }
+    }
+  },
+)
+
+server.tool(
+  "update-linked-resource",
+  "Update an existing linked resource on a Microsoft Todo task.",
+  {
+    listId: z.string().describe("ID of the task list"),
+    taskId: z.string().describe("ID of the task"),
+    linkedResourceId: z.string().describe("ID of the linked resource to update"),
+    webUrl: z.string().optional().describe("New deep link URL"),
+    applicationName: z.string().optional().describe("New source application name"),
+    displayName: z.string().optional().describe("New display name"),
+    externalId: z.string().optional().describe("New external identifier"),
+  },
+  async ({ listId, taskId, linkedResourceId, webUrl, applicationName, displayName, externalId }) => {
+    try {
+      const token = await getAccessToken()
+      if (!token) {
+        return {
+          content: [{ type: "text", text: "Failed to authenticate with Microsoft API" }],
+        }
+      }
+
+      const body: any = {}
+      if (webUrl !== undefined) body.webUrl = webUrl
+      if (applicationName !== undefined) body.applicationName = applicationName
+      if (displayName !== undefined) body.displayName = displayName
+      if (externalId !== undefined) body.externalId = externalId
+
+      if (Object.keys(body).length === 0) {
+        return {
+          content: [{ type: "text", text: "No properties provided for update." }],
+        }
+      }
+
+      const response = await makeGraphRequest<LinkedResource>(
+        `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}/linkedResources/${linkedResourceId}`,
+        token,
+        "PATCH",
+        body,
+      )
+
+      if (!response) {
+        return {
+          content: [{ type: "text", text: `Failed to update linked resource: ${linkedResourceId}` }],
+        }
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `Linked resource updated successfully!\nID: ${response.id || "Unknown"}` +
+              `${response.displayName ? `\nDisplay Name: ${response.displayName}` : ""}` +
+              `${response.webUrl ? `\nURL: ${response.webUrl}` : ""}`,
+          },
+        ],
+      }
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `Error updating linked resource: ${error}` }],
+      }
+    }
+  },
+)
+
+server.tool(
+  "delete-linked-resource",
+  "Delete a linked resource from a Microsoft Todo task.",
+  {
+    listId: z.string().describe("ID of the task list"),
+    taskId: z.string().describe("ID of the task"),
+    linkedResourceId: z.string().describe("ID of the linked resource to delete"),
+  },
+  async ({ listId, taskId, linkedResourceId }) => {
+    try {
+      const token = await getAccessToken()
+      if (!token) {
+        return {
+          content: [{ type: "text", text: "Failed to authenticate with Microsoft API" }],
+        }
+      }
+
+      await makeGraphRequest<null>(
+        `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}/linkedResources/${linkedResourceId}`,
+        token,
+        "DELETE",
+      )
+
+      return {
+        content: [{ type: "text", text: `Linked resource ${linkedResourceId} deleted from task: ${taskId}` }],
+      }
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `Error deleting linked resource: ${error}` }],
+      }
+    }
+  },
+)
+
 // Attachment tools
 server.tool(
   "get-attachments",
@@ -2453,6 +2596,50 @@ server.tool(
     } catch (error) {
       return {
         content: [{ type: "text", text: `Error fetching checklist items: ${error}` }],
+      }
+    }
+  },
+)
+
+server.tool(
+  "get-checklist-item",
+  "Get a single checklist item (subtask) by ID.",
+  {
+    listId: z.string().describe("ID of the task list"),
+    taskId: z.string().describe("ID of the task"),
+    checklistItemId: z.string().describe("ID of the checklist item"),
+  },
+  async ({ listId, taskId, checklistItemId }) => {
+    try {
+      const token = await getAccessToken()
+      if (!token) {
+        return {
+          content: [{ type: "text", text: "Failed to authenticate with Microsoft API" }],
+        }
+      }
+
+      const item = await makeGraphRequest<ChecklistItem>(
+        `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}/checklistItems/${checklistItemId}`,
+        token,
+      )
+
+      if (!item) {
+        return {
+          content: [{ type: "text", text: `Failed to retrieve checklist item: ${checklistItemId}` }],
+        }
+      }
+
+      const status = item.isChecked ? "Checked" : "Not checked"
+      let details = `${status}: ${item.displayName}\nID: ${item.id}`
+      if (item.createdDateTime) details += `\nCreated: ${new Date(item.createdDateTime).toLocaleString()}`
+      if (item.checkedDateTime) details += `\nChecked: ${new Date(item.checkedDateTime).toLocaleString()}`
+
+      return {
+        content: [{ type: "text", text: `Checklist item details:\n\n${details}` }],
+      }
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `Error fetching checklist item: ${error}` }],
       }
     }
   },
