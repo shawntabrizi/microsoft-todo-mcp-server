@@ -36,7 +36,7 @@ The following fixes and features were pulled from open PRs and community forks:
 
 ## Features
 
-- **33 MCP Tools** covering lists, tasks, checklist items, attachments, linked resources, and bulk operations
+- **36 MCP Tools** covering lists, tasks, checklist items, attachments, linked resources, and bulk operations
 - **Automatic Token Refresh** with JWT expiry decoding and 5-minute buffer
 - **Request Deduplication** prevents duplicate task creation when tools are double-invoked
 - **OAuth 2.0 Authentication** via MSAL with CSRF state verification, loopback-only binding
@@ -255,11 +255,19 @@ pnpm run format        # Format code with Prettier
 | `archive-completed-tasks` | Move completed tasks older than N days to an archive list (supports dry-run)                              |
 | `reorganize-list`         | Restructure flat tasks into category tasks with checklist items (supports dry-run and idempotency checks) |
 
+### Convenience (3 tools)
+
+| Tool               | Description                                                                     |
+| ------------------ | ------------------------------------------------------------------------------- |
+| `complete-task`    | Mark a task as completed (one-step shortcut)                                    |
+| `search-tasks`     | Search across all lists by keyword, status, importance, or due date range       |
+| `get-todays-tasks` | Get all tasks due today and overdue across all lists in a unified daily summary |
+
 ## Architecture
 
 ```
 src/
-  todo-index.ts        # Core MCP server with all 33 tools
+  todo-index.ts        # Core MCP server with all 36 tools
   cli.ts               # CLI entry point with token loading
   token-manager.ts     # Token storage, refresh, and JWT decoding
   auth-server.ts       # Express OAuth 2.0 server

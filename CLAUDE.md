@@ -30,7 +30,7 @@ pnpm start           # Run MCP server directly
 
 This is a Model Context Protocol (MCP) server that enables AI assistants to interact with Microsoft To Do via the Microsoft Graph API. The codebase follows a modular architecture with four main components:
 
-1. **MCP Server** (`src/todo-index.ts`): Core server implementing the MCP protocol with 33 tools for Microsoft To Do operations
+1. **MCP Server** (`src/todo-index.ts`): Core server implementing the MCP protocol with 36 tools for Microsoft To Do operations
 2. **CLI Wrapper** (`src/cli.ts`): Executable entry point that handles token loading from environment or file
 3. **Token Manager** (`src/token-manager.ts`): Token storage, refresh, JWT expiry decoding, and Claude config auto-update
 4. **Auth Server** (`src/auth-server.ts`): Express server implementing OAuth 2.0 flow with MSAL
