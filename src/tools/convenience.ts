@@ -5,13 +5,18 @@ import { formatTask } from "../helpers.js"
 import type { Task, TaskList } from "../types.js"
 
 // Fetch all pages of a paginated Graph API response
+interface PagedResponse<T> {
+  value: T[]
+  "@odata.nextLink"?: string
+}
+
 async function fetchAllPages<T>(url: string, token: string): Promise<{ items: T[]; errors: string[] }> {
   const items: T[] = []
   const errors: string[] = []
   let nextUrl: string | undefined = url
 
   while (nextUrl) {
-    const response = await makeGraphRequest<{ value: T[]; "@odata.nextLink"?: string }>(nextUrl, token)
+    const response: PagedResponse<T> | null = await makeGraphRequest<PagedResponse<T>>(nextUrl, token)
     if (!response) {
       errors.push(nextUrl)
       break
