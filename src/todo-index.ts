@@ -96,17 +96,7 @@ async function makeGraphRequestInner<T>(
       options.body = serializedBody
     }
 
-    console.error(`Making request to: ${url}`)
-    console.error(
-      `Request options: ${JSON.stringify({
-        method,
-        headers: {
-          ...headers,
-          Authorization: "Bearer [REDACTED]",
-        },
-        body: serializedBody ? formatBodyForLog(body) : undefined,
-      })}`,
-    )
+    console.error(`${method} ${url}`)
 
     let response = await fetch(url, options)
 
@@ -124,12 +114,7 @@ async function makeGraphRequestInner<T>(
       const errorText = await response.text()
       lastGraphRequestError = extractGraphErrorInfo(url, method, serializedBody, response.status, errorText)
 
-      console.error(`HTTP error! status: ${response.status}, body: ${errorText}`)
-      console.error(`Response headers: ${JSON.stringify(formatHeadersForLog(response.headers))}`)
-      if (serializedBody) {
-        console.error(`Request body: ${formatBodyForLog(body)}`)
-      }
-      console.error(`Request URL: ${url}`)
+      console.error(`HTTP error! status: ${response.status}`)
 
       // Check for the specific MailboxNotEnabledForRESTAPI error
       if (errorText.includes("MailboxNotEnabledForRESTAPI")) {
@@ -168,10 +153,6 @@ but API access is restricted for personal accounts.
     }
 
     const data = JSON.parse(responseText)
-    const responsePreview = formatBodyForLog(data)
-    console.error(`Response headers: ${JSON.stringify(formatHeadersForLog(response.headers))}`)
-    console.error(`Response received: ${responsePreview}`)
-
     return data as T
   } catch (error) {
     console.error("Error making Graph API request:", error)
@@ -182,6 +163,10 @@ but API access is restricted for personal accounts.
         requestBody: serializedBody,
         message: error.message,
       }
+    }
+    // Re-throw for DELETE so callers can distinguish failure from 204 success (both return null)
+    if (method === "DELETE") {
+      throw error
     }
     return null
   }
@@ -420,7 +405,8 @@ function buildRecurrencePayload(recurrence: RecurrenceInput): PatternedRecurrenc
   }
 
   if (recurrence.range.endDate !== undefined) range.endDate = recurrence.range.endDate
-  if (recurrence.range.numberOfOccurrences !== undefined) range.numberOfOccurrences = recurrence.range.numberOfOccurrences
+  if (recurrence.range.numberOfOccurrences !== undefined)
+    range.numberOfOccurrences = recurrence.range.numberOfOccurrences
   if (recurrence.range.recurrenceTimeZone !== undefined) range.recurrenceTimeZone = recurrence.range.recurrenceTimeZone
 
   return { pattern, range }
@@ -534,8 +520,12 @@ function addMonths(date: Date, months: number): Date {
   const day = date.getUTCDate()
 
   const targetMonthStart = new Date(Date.UTC(year, month + months, 1))
-  const lastDayOfMonth = new Date(Date.UTC(targetMonthStart.getUTCFullYear(), targetMonthStart.getUTCMonth() + 1, 0)).getUTCDate()
-  return new Date(Date.UTC(targetMonthStart.getUTCFullYear(), targetMonthStart.getUTCMonth(), Math.min(day, lastDayOfMonth)))
+  const lastDayOfMonth = new Date(
+    Date.UTC(targetMonthStart.getUTCFullYear(), targetMonthStart.getUTCMonth() + 1, 0),
+  ).getUTCDate()
+  return new Date(
+    Date.UTC(targetMonthStart.getUTCFullYear(), targetMonthStart.getUTCMonth(), Math.min(day, lastDayOfMonth)),
+  )
 }
 
 function diffDays(start: Date, end: Date): number {
@@ -603,13 +593,21 @@ function matchesRecurrenceDate(date: Date, recurrence: PatternedRecurrence, anch
     case "weekly": {
       const daysOfWeek = recurrence.pattern.daysOfWeek || []
       if (daysOfWeek.length === 0) return false
-      const weekOffset = Math.floor(diffDays(startOfWeek(anchorDate, recurrence.pattern.firstDayOfWeek || "sunday"), startOfWeek(date, recurrence.pattern.firstDayOfWeek || "sunday")) / 7)
+      const weekOffset = Math.floor(
+        diffDays(
+          startOfWeek(anchorDate, recurrence.pattern.firstDayOfWeek || "sunday"),
+          startOfWeek(date, recurrence.pattern.firstDayOfWeek || "sunday"),
+        ) / 7,
+      )
       return weekOffset % interval === 0 && daysOfWeek.map(getWeekdayIndex).includes(date.getUTCDay())
     }
     case "absoluteMonthly":
       return diffMonths(anchorDate, date) % interval === 0 && recurrence.pattern.dayOfMonth === date.getUTCDate()
     case "relativeMonthly":
-      return diffMonths(anchorDate, date) % interval === 0 && matchesRelativePattern(date, recurrence.pattern.daysOfWeek || [], recurrence.pattern.index)
+      return (
+        diffMonths(anchorDate, date) % interval === 0 &&
+        matchesRelativePattern(date, recurrence.pattern.daysOfWeek || [], recurrence.pattern.index)
+      )
     case "absoluteYearly":
       return (
         diffYears(anchorDate, date) % interval === 0 &&
@@ -689,7 +687,11 @@ async function patchRecurringTaskDateFields(
   }
 
   const effectiveDueDate =
-    taskBody.dueDateTime === undefined ? existingTask.dueDateTime : taskBody.dueDateTime === null ? null : (taskBody.dueDateTime as DateTimeTimeZone)
+    taskBody.dueDateTime === undefined
+      ? existingTask.dueDateTime
+      : taskBody.dueDateTime === null
+        ? null
+        : (taskBody.dueDateTime as DateTimeTimeZone)
 
   if (!effectiveDueDate) {
     return {
@@ -699,9 +701,14 @@ async function patchRecurringTaskDateFields(
     }
   }
 
-  const clearedRecurrence = await makeGraphRequest<Task>(`${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}`, token, "PATCH", {
-    recurrence: null,
-  })
+  const clearedRecurrence = await makeGraphRequest<Task>(
+    `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}`,
+    token,
+    "PATCH",
+    {
+      recurrence: null,
+    },
+  )
 
   if (!clearedRecurrence) {
     return { error: `Failed to temporarily clear recurrence for task ${taskId} before updating date fields.` }
@@ -806,20 +813,30 @@ function formatTask(task: Task): string {
 
   if (task.linkedResources && task.linkedResources.length > 0) {
     const linkedSummary = task.linkedResources
-      .map((resource) => resource.displayName || resource.applicationName || resource.webUrl || resource.id || "Linked item")
+      .map(
+        (resource) =>
+          resource.displayName || resource.applicationName || resource.webUrl || resource.id || "Linked item",
+      )
       .join(", ")
     taskInfo += `\nLinked Resources: ${linkedSummary}`
   }
 
   if (task.createdDateTime) taskInfo += `\nCreated: ${new Date(task.createdDateTime).toLocaleString()}`
   if (task.lastModifiedDateTime) taskInfo += `\nLast Modified: ${new Date(task.lastModifiedDateTime).toLocaleString()}`
-  if (task.bodyLastModifiedDateTime) taskInfo += `\nBody Modified: ${new Date(task.bodyLastModifiedDateTime).toLocaleString()}`
+  if (task.bodyLastModifiedDateTime)
+    taskInfo += `\nBody Modified: ${new Date(task.bodyLastModifiedDateTime).toLocaleString()}`
 
   if (task.body && task.body.content && task.body.content.trim() !== "") {
     taskInfo += `\nDescription: ${task.body.content}`
   }
 
   return `${taskInfo}\n---`
+}
+
+const GRAPH_URL_PREFIX = "https://graph.microsoft.com/"
+
+function isAllowedGraphUrl(url: string): boolean {
+  return url.startsWith(GRAPH_URL_PREFIX)
 }
 
 function isTaskFileAttachment(value: unknown): value is TaskFileAttachment {
@@ -1051,7 +1068,10 @@ server.tool(
   "get-task-lists-delta",
   "Track changes to Microsoft Todo task lists using the Graph delta API.",
   {
-    deltaUrl: z.string().optional().describe("Full @odata.nextLink or @odata.deltaLink URL from a previous delta response"),
+    deltaUrl: z
+      .string()
+      .optional()
+      .describe("Full @odata.nextLink or @odata.deltaLink URL from a previous delta response"),
     deltaToken: z.string().optional().describe("Delta token from a previous delta response"),
     skipToken: z.string().optional().describe("Skip token from a previous delta response"),
     select: z.string().optional().describe("Comma-separated list of properties to include on the initial request"),
@@ -1067,6 +1087,16 @@ server.tool(
       }
 
       let url = deltaUrl || `${MS_GRAPH_BASE}/me/todo/lists/delta`
+      if (deltaUrl && !isAllowedGraphUrl(deltaUrl)) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Invalid deltaUrl: must be a Microsoft Graph API URL (https://graph.microsoft.com/...)",
+            },
+          ],
+        }
+      }
       if (!deltaUrl) {
         const queryParams = new URLSearchParams()
         if (deltaToken) queryParams.append("$deltatoken", deltaToken)
@@ -1076,22 +1106,15 @@ server.tool(
         if (queryString) url += `?${queryString}`
       }
 
-      const headers: Record<string, string> = {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
+      const data = await makeGraphRequest<DeltaResponse<TaskList>>(url, token)
+      if (!data) {
+        return {
+          content: [{ type: "text", text: "Failed to fetch task list delta" }],
+        }
       }
-      if (maxPageSize) {
-        headers.Prefer = `odata.maxpagesize=${maxPageSize}`
-      }
-
-      const response = await fetch(url, { method: "GET", headers })
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
-      }
-
-      const data = (await response.json()) as DeltaResponse<TaskList>
-      const formattedLists = (data.value || []).map((list) => `ID: ${list.id}\nName: ${list.displayName}\n---`).join("\n")
+      const formattedLists = (data.value || [])
+        .map((list) => `ID: ${list.id}\nName: ${list.displayName}\n---`)
+        .join("\n")
 
       return {
         content: [
@@ -1127,7 +1150,9 @@ server.tool(
         }
       }
 
-      const response = await makeGraphRequest<TaskList>(`${MS_GRAPH_BASE}/me/todo/lists`, token, "POST", { displayName })
+      const response = await makeGraphRequest<TaskList>(`${MS_GRAPH_BASE}/me/todo/lists`, token, "POST", {
+        displayName,
+      })
 
       if (!response) {
         return {
@@ -1164,12 +1189,9 @@ server.tool(
         }
       }
 
-      const response = await makeGraphRequest<TaskList>(
-        `${MS_GRAPH_BASE}/me/todo/lists/${listId}`,
-        token,
-        "PATCH",
-        { displayName },
-      )
+      const response = await makeGraphRequest<TaskList>(`${MS_GRAPH_BASE}/me/todo/lists/${listId}`, token, "PATCH", {
+        displayName,
+      })
 
       if (!response) {
         return {
@@ -1329,7 +1351,10 @@ server.tool(
   "Track changes to tasks in a Microsoft Todo list using the Graph delta API.",
   {
     listId: z.string().describe("ID of the task list"),
-    deltaUrl: z.string().optional().describe("Full @odata.nextLink or @odata.deltaLink URL from a previous delta response"),
+    deltaUrl: z
+      .string()
+      .optional()
+      .describe("Full @odata.nextLink or @odata.deltaLink URL from a previous delta response"),
     deltaToken: z.string().optional().describe("Delta token from a previous delta response"),
     skipToken: z.string().optional().describe("Skip token from a previous delta response"),
     select: z.string().optional().describe("Comma-separated list of properties to include on the initial request"),
@@ -1347,6 +1372,16 @@ server.tool(
       }
 
       let url = deltaUrl || `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/delta`
+      if (deltaUrl && !isAllowedGraphUrl(deltaUrl)) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Invalid deltaUrl: must be a Microsoft Graph API URL (https://graph.microsoft.com/...)",
+            },
+          ],
+        }
+      }
       if (!deltaUrl) {
         const queryParams = new URLSearchParams()
         if (deltaToken) queryParams.append("$deltatoken", deltaToken)
@@ -1358,21 +1393,12 @@ server.tool(
         if (queryString) url += `?${queryString}`
       }
 
-      const headers: Record<string, string> = {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
+      const data = await makeGraphRequest<DeltaResponse<Task>>(url, token)
+      if (!data) {
+        return {
+          content: [{ type: "text", text: `Failed to fetch task delta for list: ${listId}` }],
+        }
       }
-      if (maxPageSize) {
-        headers.Prefer = `odata.maxpagesize=${maxPageSize}`
-      }
-
-      const response = await fetch(url, { method: "GET", headers })
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
-      }
-
-      const data = (await response.json()) as DeltaResponse<Task>
       const formattedTasks = (data.value || []).map((task) => formatTask(task)).join("\n")
 
       return {
@@ -1415,8 +1441,18 @@ server.tool(
     linkedResources: z.array(linkedResourceSchema).optional().describe("Linked resources to create with the task"),
   },
   async ({
-    listId, title, body, dueDateTime, completedDateTime, importance,
-    isReminderOn, reminderDateTime, recurrence, status, categories, linkedResources,
+    listId,
+    title,
+    body,
+    dueDateTime,
+    completedDateTime,
+    importance,
+    isReminderOn,
+    reminderDateTime,
+    recurrence,
+    status,
+    categories,
+    linkedResources,
   }) => {
     try {
       const token = await getAccessToken()
@@ -1444,7 +1480,10 @@ server.tool(
         if (!taskBody.dueDateTime) {
           return {
             content: [
-              { type: "text", text: "Recurring tasks require dueDateTime. Please provide dueDateTime or remove the recurrence." },
+              {
+                type: "text",
+                text: "Recurring tasks require dueDateTime. Please provide dueDateTime or remove the recurrence.",
+              },
             ],
           }
         }
@@ -1503,8 +1542,18 @@ server.tool(
     categories: z.array(z.string()).optional().describe("New categories associated with the task"),
   },
   async ({
-    listId, taskId, title, body, dueDateTime, completedDateTime, importance,
-    isReminderOn, reminderDateTime, recurrence, status, categories,
+    listId,
+    taskId,
+    title,
+    body,
+    dueDateTime,
+    completedDateTime,
+    importance,
+    isReminderOn,
+    reminderDateTime,
+    recurrence,
+    status,
+    categories,
   }) => {
     try {
       const token = await getAccessToken()
@@ -1545,11 +1594,19 @@ server.tool(
           taskBody.recurrence = null
         } else {
           if (taskBody.dueDateTime === undefined) {
-            existingTask = await makeGraphRequest<Task>(`${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}`, token)
+            existingTask = await makeGraphRequest<Task>(
+              `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}`,
+              token,
+            )
 
             if (!existingTask) {
               return {
-                content: [{ type: "text", text: `Failed to load task ${taskId} to determine the due date required for recurrence updates.` }],
+                content: [
+                  {
+                    type: "text",
+                    text: `Failed to load task ${taskId} to determine the due date required for recurrence updates.`,
+                  },
+                ],
               }
             }
 
@@ -1579,7 +1636,10 @@ server.tool(
           } else if (taskBody.dueDateTime === null) {
             return {
               content: [
-                { type: "text", text: "Cannot clear dueDateTime while setting recurrence. Microsoft Graph requires dueDateTime for recurrence updates." },
+                {
+                  type: "text",
+                  text: "Cannot clear dueDateTime while setting recurrence. Microsoft Graph requires dueDateTime for recurrence updates.",
+                },
               ],
             }
           }
@@ -1595,7 +1655,9 @@ server.tool(
         recurrence === undefined && (taskBody.dueDateTime !== undefined || taskBody.reminderDateTime !== undefined)
 
       if (isRecurringTaskDateAdjustment) {
-        existingTask = existingTask || (await makeGraphRequest<Task>(`${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}`, token))
+        existingTask =
+          existingTask ||
+          (await makeGraphRequest<Task>(`${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}`, token))
 
         if (!existingTask) {
           return {
@@ -1607,13 +1669,18 @@ server.tool(
           const recurringPatchResult = await patchRecurringTaskDateFields(token, listId, taskId, existingTask, taskBody)
           if (recurringPatchResult.error || !recurringPatchResult.task) {
             return {
-              content: [{ type: "text", text: recurringPatchResult.error || `Failed to update recurring task ${taskId}.` }],
+              content: [
+                { type: "text", text: recurringPatchResult.error || `Failed to update recurring task ${taskId}.` },
+              ],
             }
           }
 
           return {
             content: [
-              { type: "text", text: `Task updated successfully!\nID: ${recurringPatchResult.task.id}\nTitle: ${recurringPatchResult.task.title}` },
+              {
+                type: "text",
+                text: `Task updated successfully!\nID: ${recurringPatchResult.task.id}\nTitle: ${recurringPatchResult.task.title}`,
+              },
             ],
           }
         }
@@ -1621,11 +1688,21 @@ server.tool(
 
       if (Object.keys(taskBody).length === 0) {
         return {
-          content: [{ type: "text", text: "No properties provided for update. Please specify at least one property to change." }],
+          content: [
+            {
+              type: "text",
+              text: "No properties provided for update. Please specify at least one property to change.",
+            },
+          ],
         }
       }
 
-      const response = await makeGraphRequest<Task>(`${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}`, token, "PATCH", taskBody)
+      const response = await makeGraphRequest<Task>(
+        `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}`,
+        token,
+        "PATCH",
+        taskBody,
+      )
 
       if (!response) {
         if (taskBody.recurrence !== undefined && isRecurrencePatchDateError(lastGraphRequestError)) {
@@ -1633,8 +1710,7 @@ server.tool(
             content: [
               {
                 type: "text",
-                text:
-                  "Microsoft Graph rejected the recurrence update. This appears to be a Graph To Do API limitation affecting PATCH updates to recurrence.range.startDate.",
+                text: "Microsoft Graph rejected the recurrence update. This appears to be a Graph To Do API limitation affecting PATCH updates to recurrence.range.startDate.",
               },
             ],
           }
@@ -1763,22 +1839,37 @@ server.tool(
         }
       }
 
-      // Copy checklist items
+      // Copy checklist items and track failures
+      let checklistCopied = 0
+      let checklistFailed = 0
       for (const item of checklistItems) {
-        await makeGraphRequest(
+        const result = await makeGraphRequest(
           `${MS_GRAPH_BASE}/me/todo/lists/${targetListId}/tasks/${newTask.id}/checklistItems`,
           token,
           "POST",
           { displayName: item.displayName, isChecked: item.isChecked },
         )
+        if (result) {
+          checklistCopied++
+        } else {
+          checklistFailed++
+        }
       }
 
-      // Delete the original task
-      await makeGraphRequest(
-        `${MS_GRAPH_BASE}/me/todo/lists/${sourceListId}/tasks/${sourceTaskId}`,
-        token,
-        "DELETE",
-      )
+      // Only delete the original if the new task was created and all checklist items copied
+      let deleteStatus = "Skipped (checklist copy had failures)"
+      if (checklistFailed === 0) {
+        try {
+          await makeGraphRequest(
+            `${MS_GRAPH_BASE}/me/todo/lists/${sourceListId}/tasks/${sourceTaskId}`,
+            token,
+            "DELETE",
+          )
+          deleteStatus = "Yes"
+        } catch {
+          deleteStatus = "Failed"
+        }
+      }
 
       return {
         content: [
@@ -1787,8 +1878,9 @@ server.tool(
             text:
               `Successfully moved task "${originalTask.title}"\n\n` +
               `New Task ID: ${newTask.id}\n` +
-              `Checklist items moved: ${checklistItems.length}\n` +
-              `Original task deleted: Yes`,
+              `Checklist items copied: ${checklistCopied}/${checklistItems.length}` +
+              (checklistFailed > 0 ? ` (${checklistFailed} failed)` : "") +
+              `\nOriginal task deleted: ${deleteStatus}`,
           },
         ],
       }
@@ -1832,7 +1924,9 @@ server.tool(
 
       if (!task.dueDateTime?.dateTime) {
         return {
-          content: [{ type: "text", text: "Recurring tasks need dueDateTime in order to skip to the current occurrence." }],
+          content: [
+            { type: "text", text: "Recurring tasks need dueDateTime in order to skip to the current occurrence." },
+          ],
         }
       }
 
@@ -1846,7 +1940,12 @@ server.tool(
 
       if (targetDueDate <= currentDueDate) {
         return {
-          content: [{ type: "text", text: `Task is already on the current occurrence.\nDue Date: ${formatDateOnly(currentDueDate)}` }],
+          content: [
+            {
+              type: "text",
+              text: `Task is already on the current occurrence.\nDue Date: ${formatDateOnly(currentDueDate)}`,
+            },
+          ],
         }
       }
 
@@ -1866,8 +1965,7 @@ server.tool(
       }
 
       if (dryRun) {
-        let preview =
-          `Skip Preview\nTask: ${task.title}\nCurrent Due Date: ${formatDateOnly(currentDueDate)}\nNew Due Date: ${formatDateOnly(targetDueDate)}`
+        let preview = `Skip Preview\nTask: ${task.title}\nCurrent Due Date: ${formatDateOnly(currentDueDate)}\nNew Due Date: ${formatDateOnly(targetDueDate)}`
 
         if (task.reminderDateTime?.dateTime) {
           preview +=
@@ -1886,7 +1984,12 @@ server.tool(
       const recurringPatchResult = await patchRecurringTaskDateFields(token, listId, taskId, task, patchBody)
       if (recurringPatchResult.error || !recurringPatchResult.task) {
         return {
-          content: [{ type: "text", text: recurringPatchResult.error || `Failed to skip recurring task ${taskId} to the current occurrence.` }],
+          content: [
+            {
+              type: "text",
+              text: recurringPatchResult.error || `Failed to skip recurring task ${taskId} to the current occurrence.`,
+            },
+          ],
         }
       }
 
@@ -2263,10 +2366,16 @@ server.tool(
         }
       }
 
-      await makeGraphRequest<null>(`${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}/attachments/${attachmentId}`, token, "DELETE")
+      await makeGraphRequest<null>(
+        `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}/attachments/${attachmentId}`,
+        token,
+        "DELETE",
+      )
 
       return {
-        content: [{ type: "text", text: `Attachment with ID: ${attachmentId} was successfully deleted from task: ${taskId}` }],
+        content: [
+          { type: "text", text: `Attachment with ID: ${attachmentId} was successfully deleted from task: ${taskId}` },
+        ],
       }
     } catch (error) {
       return {
@@ -2334,7 +2443,12 @@ server.tool(
       })
 
       return {
-        content: [{ type: "text", text: `Checklist items for task "${taskTitle}" (ID: ${taskId}):\n\n${formattedItems.join("\n\n")}` }],
+        content: [
+          {
+            type: "text",
+            text: `Checklist items for task "${taskTitle}" (ID: ${taskId}):\n\n${formattedItems.join("\n\n")}`,
+          },
+        ],
       }
     } catch (error) {
       return {
@@ -2383,7 +2497,12 @@ server.tool(
       }
 
       return {
-        content: [{ type: "text", text: `Checklist item created successfully!\nContent: ${response.displayName}\nID: ${response.id}` }],
+        content: [
+          {
+            type: "text",
+            text: `Checklist item created successfully!\nContent: ${response.displayName}\nID: ${response.id}`,
+          },
+        ],
       }
     } catch (error) {
       return {
@@ -2425,7 +2544,12 @@ server.tool(
 
       if (Object.keys(requestBody).length === 0) {
         return {
-          content: [{ type: "text", text: "No properties provided for update. Please specify at least one checklist item property to change." }],
+          content: [
+            {
+              type: "text",
+              text: "No properties provided for update. Please specify at least one checklist item property to change.",
+            },
+          ],
         }
       }
 
@@ -2445,7 +2569,12 @@ server.tool(
       const statusText = response.isChecked ? "Checked" : "Not checked"
 
       return {
-        content: [{ type: "text", text: `Checklist item updated successfully!\nContent: ${response.displayName}\nStatus: ${statusText}` }],
+        content: [
+          {
+            type: "text",
+            text: `Checklist item updated successfully!\nContent: ${response.displayName}\nStatus: ${statusText}`,
+          },
+        ],
       }
     } catch (error) {
       return {
@@ -2479,7 +2608,12 @@ server.tool(
       )
 
       return {
-        content: [{ type: "text", text: `Checklist item with ID: ${checklistItemId} was successfully deleted from task: ${taskId}` }],
+        content: [
+          {
+            type: "text",
+            text: `Checklist item with ID: ${checklistItemId} was successfully deleted from task: ${taskId}`,
+          },
+        ],
       }
     } catch (error) {
       return {
@@ -2633,10 +2767,7 @@ server.tool(
       .boolean()
       .default(true)
       .describe("Delete original flat tasks after reorganizing (default: true)"),
-    dryRun: z
-      .boolean()
-      .default(false)
-      .describe("Preview changes without executing (default: false)"),
+    dryRun: z.boolean().default(false).describe("Preview changes without executing (default: false)"),
   },
   async ({ listId, categories, deleteOriginals, dryRun }) => {
     try {
@@ -2735,6 +2866,7 @@ server.tool(
       let createdCategories = 0
       let createdItems = 0
       let failedItems: string[] = []
+      const successfullyMovedTaskIds = new Set<string>()
 
       for (const cat of categories) {
         try {
@@ -2764,6 +2896,9 @@ server.tool(
                 { displayName },
               )
               createdItems++
+              if (sourceTask) {
+                successfullyMovedTaskIds.add(sourceTask.id)
+              }
             } catch (error) {
               failedItems.push(`Item: ${displayName}`)
             }
@@ -2773,18 +2908,15 @@ server.tool(
         }
       }
 
-      // Delete originals
+      // Only delete originals that were successfully added as checklist items
       let deletedCount = 0
       let deleteFailures: string[] = []
 
       if (deleteOriginals) {
         for (const taskId of matchedTaskIds) {
+          if (!successfullyMovedTaskIds.has(taskId)) continue
           try {
-            await makeGraphRequest(
-              `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}`,
-              token,
-              "DELETE",
-            )
+            await makeGraphRequest(`${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}`, token, "DELETE")
             deletedCount++
           } catch (error) {
             const task = existingTasks.find((t) => t.id === taskId)

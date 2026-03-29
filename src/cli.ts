@@ -3,38 +3,53 @@
 import { startServer } from "./todo-index.js"
 import fs from "fs"
 import path from "path"
-import { fileURLToPath } from "url"
+import { homedir } from "os"
 
-// Get the directory path for the current module
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+// Resolve token file path: env var > platform config dir > cwd fallback
+function resolveTokenFilePath(): string {
+  if (process.env.MSTODO_TOKEN_FILE) {
+    return process.env.MSTODO_TOKEN_FILE
+  }
+
+  const configDir =
+    process.platform === "win32"
+      ? path.join(process.env.APPDATA || path.join(homedir(), "AppData", "Roaming"), "microsoft-todo-mcp")
+      : path.join(homedir(), ".config", "microsoft-todo-mcp")
+
+  const configPath = path.join(configDir, "tokens.json")
+  if (fs.existsSync(configPath)) {
+    return configPath
+  }
+
+  // Legacy fallback
+  const cwdPath = path.join(process.cwd(), "tokens.json")
+  if (fs.existsSync(cwdPath)) {
+    return cwdPath
+  }
+
+  return configPath
+}
+
+const TOKEN_FILE_PATH = resolveTokenFilePath()
 
 // Check for tokens in environment variables
 let accessToken = process.env.MS_TODO_ACCESS_TOKEN
 let refreshToken = process.env.MS_TODO_REFRESH_TOKEN
 
-// Define token file path
-const TOKEN_FILE_PATH = process.env.MSTODO_TOKEN_FILE || path.join(process.cwd(), "tokens.json")
-
-// Log startup info
 console.error("Microsoft Todo MCP CLI")
-console.error(`Looking for tokens in: ${TOKEN_FILE_PATH}`)
+console.error(`Token file: ${TOKEN_FILE_PATH}`)
 
 // Check if tokens are missing from environment but available in file
 if ((!accessToken || !refreshToken) && fs.existsSync(TOKEN_FILE_PATH)) {
   try {
-    console.error("Reading tokens from file...")
     const tokenData = JSON.parse(fs.readFileSync(TOKEN_FILE_PATH, "utf8"))
 
-    // If we found tokens in the file, use them
     if (!accessToken && tokenData.accessToken) {
       accessToken = tokenData.accessToken
-      console.error("Using access token from file")
     }
 
     if (!refreshToken && tokenData.refreshToken) {
       refreshToken = tokenData.refreshToken
-      console.error("Using refresh token from file")
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)

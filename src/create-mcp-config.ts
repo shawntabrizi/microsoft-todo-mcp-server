@@ -33,8 +33,8 @@ try {
     },
   }
 
-  // Write the config
-  fs.writeFileSync(outputPath, JSON.stringify(mcpConfig, null, 2), "utf8")
+  // Write the config with restrictive permissions (owner read/write only)
+  fs.writeFileSync(outputPath, JSON.stringify(mcpConfig, null, 2), { encoding: "utf8", mode: 0o600 })
 
   console.log("MCP configuration file created successfully!")
   console.log("You can now use the service with Claude or Cursor by referencing this mcp.json file.")

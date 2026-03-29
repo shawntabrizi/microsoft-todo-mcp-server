@@ -238,7 +238,7 @@ export class TokenManager {
 
   saveTokens(tokens: StoredTokenData): void {
     this.currentTokens = tokens
-    writeFileSync(this.tokenFilePath, JSON.stringify(tokens, null, 2), "utf8")
+    writeFileSync(this.tokenFilePath, JSON.stringify(tokens, null, 2), { encoding: "utf8", mode: 0o600 })
   }
 
   // Update Claude config automatically

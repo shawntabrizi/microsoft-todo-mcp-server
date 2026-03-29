@@ -12,27 +12,27 @@ If you've contributed to the original repo or a fork and want your work included
 
 The following fixes and features were pulled from open PRs and community forks:
 
-| Contribution | Author | Source |
-|---|---|---|
-| Configurable auth server port via `AUTH_PORT` env var | [@vavdb](https://github.com/vavdb) | [PR #4](https://github.com/jordanburke/microsoft-todo-mcp-server/pull/4) |
-| Fix ESM dynamic `require('fs')` with static import | [@jleaders](https://github.com/jleaders) | [PR #3](https://github.com/jordanburke/microsoft-todo-mcp-server/pull/3) |
-| Full task metadata: timestamps, recurrence, attachments | [@ThePlasmak](https://github.com/ThePlasmak) | [PR #2](https://github.com/jordanburke/microsoft-todo-mcp-server/pull/2) |
-| Request deduplication preventing duplicate task creation | [@Mcp20091](https://github.com/Mcp20091) | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server) |
-| DELETE 204 No Content handling fix | [@Mcp20091](https://github.com/Mcp20091) | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server) |
-| Improved token manager (JWT expiry, forceRefresh, configure) | [@Mcp20091](https://github.com/Mcp20091) | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server) |
-| Full task display without description truncation | [@Mcp20091](https://github.com/Mcp20091) | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server) |
-| Proper recurrence handling for recurring task date updates | [@Mcp20091](https://github.com/Mcp20091) | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server) |
-| `auth-status` and `refresh-auth-token` tools | [@Mcp20091](https://github.com/Mcp20091) | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server) |
-| Single-item getters: `get-task`, `get-task-list` | [@Mcp20091](https://github.com/Mcp20091) | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server) |
-| Delta query tools: `get-tasks-delta`, `get-task-lists-delta` | [@Mcp20091](https://github.com/Mcp20091) | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server) |
-| `skip-task-to-current` recurring task tool | [@Mcp20091](https://github.com/Mcp20091) | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server) |
-| Linked resource tools: `get-linked-resources`, `create-linked-resource` | [@Mcp20091](https://github.com/Mcp20091) | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server) |
-| Attachment tools: `get-attachments`, `get-attachment`, `create-attachment`, `delete-attachment`, `create-attachment-upload-session` | [@Mcp20091](https://github.com/Mcp20091) | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server) |
-| `archive-completed-tasks` bulk operation | [@Mcp20091](https://github.com/Mcp20091) | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server) |
-| Enhanced `create-task` / `update-task` with recurrence, linkedResources, categories | [@Mcp20091](https://github.com/Mcp20091) | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server) |
-| `move-task` tool (cross-list with metadata preservation) | [@steven-pribilinskiy](https://github.com/steven-pribilinskiy) | [Fork](https://github.com/steven-pribilinskiy/microsoft-todo-mcp-server) |
-| `reorganize-list` tool (bulk task restructuring with dry-run) | [@commit21](https://github.com/commit21) | [Fork](https://github.com/commit21/microsoft-todo-mcp-server) |
-| tsup target bump to `node18` with explicit `platform: 'node'` | [@jleaders](https://github.com/jleaders) | [PR #3](https://github.com/jordanburke/microsoft-todo-mcp-server/pull/3) |
+| Contribution                                                                                                                        | Author                                                         | Source                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Configurable auth server port via `AUTH_PORT` env var                                                                               | [@vavdb](https://github.com/vavdb)                             | [PR #4](https://github.com/jordanburke/microsoft-todo-mcp-server/pull/4) |
+| Fix ESM dynamic `require('fs')` with static import                                                                                  | [@jleaders](https://github.com/jleaders)                       | [PR #3](https://github.com/jordanburke/microsoft-todo-mcp-server/pull/3) |
+| Full task metadata: timestamps, recurrence, attachments                                                                             | [@ThePlasmak](https://github.com/ThePlasmak)                   | [PR #2](https://github.com/jordanburke/microsoft-todo-mcp-server/pull/2) |
+| Request deduplication preventing duplicate task creation                                                                            | [@Mcp20091](https://github.com/Mcp20091)                       | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server)            |
+| DELETE 204 No Content handling fix                                                                                                  | [@Mcp20091](https://github.com/Mcp20091)                       | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server)            |
+| Improved token manager (JWT expiry, forceRefresh, configure)                                                                        | [@Mcp20091](https://github.com/Mcp20091)                       | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server)            |
+| Full task display without description truncation                                                                                    | [@Mcp20091](https://github.com/Mcp20091)                       | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server)            |
+| Proper recurrence handling for recurring task date updates                                                                          | [@Mcp20091](https://github.com/Mcp20091)                       | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server)            |
+| `auth-status` and `refresh-auth-token` tools                                                                                        | [@Mcp20091](https://github.com/Mcp20091)                       | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server)            |
+| Single-item getters: `get-task`, `get-task-list`                                                                                    | [@Mcp20091](https://github.com/Mcp20091)                       | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server)            |
+| Delta query tools: `get-tasks-delta`, `get-task-lists-delta`                                                                        | [@Mcp20091](https://github.com/Mcp20091)                       | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server)            |
+| `skip-task-to-current` recurring task tool                                                                                          | [@Mcp20091](https://github.com/Mcp20091)                       | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server)            |
+| Linked resource tools: `get-linked-resources`, `create-linked-resource`                                                             | [@Mcp20091](https://github.com/Mcp20091)                       | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server)            |
+| Attachment tools: `get-attachments`, `get-attachment`, `create-attachment`, `delete-attachment`, `create-attachment-upload-session` | [@Mcp20091](https://github.com/Mcp20091)                       | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server)            |
+| `archive-completed-tasks` bulk operation                                                                                            | [@Mcp20091](https://github.com/Mcp20091)                       | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server)            |
+| Enhanced `create-task` / `update-task` with recurrence, linkedResources, categories                                                 | [@Mcp20091](https://github.com/Mcp20091)                       | [Fork](https://github.com/Mcp20091/microsoft-todo-mcp-server)            |
+| `move-task` tool (cross-list with metadata preservation)                                                                            | [@steven-pribilinskiy](https://github.com/steven-pribilinskiy) | [Fork](https://github.com/steven-pribilinskiy/microsoft-todo-mcp-server) |
+| `reorganize-list` tool (bulk task restructuring with dry-run)                                                                       | [@commit21](https://github.com/commit21)                       | [Fork](https://github.com/commit21/microsoft-todo-mcp-server)            |
+| tsup target bump to `node18` with explicit `platform: 'node'`                                                                       | [@jleaders](https://github.com/jleaders)                       | [PR #3](https://github.com/jordanburke/microsoft-todo-mcp-server/pull/3) |
 
 ## Features
 
@@ -105,12 +105,12 @@ REDIRECT_URI=http://localhost:3000/callback
 
 **`TENANT_ID` options:**
 
-| Value | Use Case |
-|---|---|
-| `organizations` | Multi-tenant work/school accounts (default) |
-| `consumers` | Personal Microsoft accounts only |
-| `common` | Both work/school and personal accounts |
-| `<your-tenant-id>` | Single-tenant / specific organization |
+| Value              | Use Case                                    |
+| ------------------ | ------------------------------------------- |
+| `organizations`    | Multi-tenant work/school accounts (default) |
+| `consumers`        | Personal Microsoft accounts only            |
+| `common`           | Both work/school and personal accounts      |
+| `<your-tenant-id>` | Single-tenant / specific organization       |
 
 ### Token Storage
 
@@ -187,67 +187,67 @@ pnpm run format        # Format code with Prettier
 
 ### Authentication (2 tools)
 
-| Tool | Description |
-|---|---|
-| `auth-status` | Check authentication status, token expiration, and account type |
-| `refresh-auth-token` | Force a token refresh and report the new expiration time |
+| Tool                 | Description                                                     |
+| -------------------- | --------------------------------------------------------------- |
+| `auth-status`        | Check authentication status, token expiration, and account type |
+| `refresh-auth-token` | Force a token refresh and report the new expiration time        |
 
 ### Task Lists (6 tools)
 
-| Tool | Description |
-|---|---|
-| `get-task-lists` | Get all task lists with metadata (default, shared, etc.) |
-| `get-task-list` | Get a single task list by ID |
-| `get-task-lists-delta` | Track changes to task lists via delta queries |
-| `create-task-list` | Create a new task list |
-| `update-task-list` | Rename an existing task list |
-| `delete-task-list` | Delete a task list and all its contents |
+| Tool                   | Description                                              |
+| ---------------------- | -------------------------------------------------------- |
+| `get-task-lists`       | Get all task lists with metadata (default, shared, etc.) |
+| `get-task-list`        | Get a single task list by ID                             |
+| `get-task-lists-delta` | Track changes to task lists via delta queries            |
+| `create-task-list`     | Create a new task list                                   |
+| `update-task-list`     | Rename an existing task list                             |
+| `delete-task-list`     | Delete a task list and all its contents                  |
 
 ### Tasks (8 tools)
 
-| Tool | Description |
-|---|---|
-| `get-tasks` | Get tasks with OData filtering, sorting, and pagination (`$filter`, `$select`, `$orderby`, `$top`, `$skip`, `$count`) |
-| `get-task` | Get a single task by ID |
-| `get-tasks-delta` | Track changes to tasks via delta queries |
-| `create-task` | Create a task with title, body, due date, start date, importance, reminders, recurrence, status, categories, and linked resources |
-| `update-task` | Update any task properties, with proper handling for recurring task date adjustments |
-| `delete-task` | Delete a task and all its checklist items |
-| `move-task` | Move a task between lists, preserving checklist items and metadata |
-| `skip-task-to-current` | Advance a recurring task to the next occurrence on or after today |
+| Tool                   | Description                                                                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `get-tasks`            | Get tasks with OData filtering, sorting, and pagination (`$filter`, `$select`, `$orderby`, `$top`, `$skip`, `$count`)             |
+| `get-task`             | Get a single task by ID                                                                                                           |
+| `get-tasks-delta`      | Track changes to tasks via delta queries                                                                                          |
+| `create-task`          | Create a task with title, body, due date, start date, importance, reminders, recurrence, status, categories, and linked resources |
+| `update-task`          | Update any task properties, with proper handling for recurring task date adjustments                                              |
+| `delete-task`          | Delete a task and all its checklist items                                                                                         |
+| `move-task`            | Move a task between lists, preserving checklist items and metadata                                                                |
+| `skip-task-to-current` | Advance a recurring task to the next occurrence on or after today                                                                 |
 
 ### Checklist Items / Subtasks (4 tools)
 
-| Tool | Description |
-|---|---|
-| `get-checklist-items` | Get subtasks for a specific task |
+| Tool                    | Description                                              |
+| ----------------------- | -------------------------------------------------------- |
+| `get-checklist-items`   | Get subtasks for a specific task                         |
 | `create-checklist-item` | Add a subtask with optional checked state and timestamps |
-| `update-checklist-item` | Update subtask text, completion status, or timestamps |
-| `delete-checklist-item` | Remove a specific subtask |
+| `update-checklist-item` | Update subtask text, completion status, or timestamps    |
+| `delete-checklist-item` | Remove a specific subtask                                |
 
 ### Attachments (5 tools)
 
-| Tool | Description |
-|---|---|
-| `get-attachments` | List file attachments on a task |
-| `get-attachment` | Get a single attachment by ID |
-| `create-attachment` | Attach a small file (base64-encoded, under 3 MB) |
-| `create-attachment-upload-session` | Create an upload session for large files |
-| `delete-attachment` | Remove a file attachment |
+| Tool                               | Description                                      |
+| ---------------------------------- | ------------------------------------------------ |
+| `get-attachments`                  | List file attachments on a task                  |
+| `get-attachment`                   | Get a single attachment by ID                    |
+| `create-attachment`                | Attach a small file (base64-encoded, under 3 MB) |
+| `create-attachment-upload-session` | Create an upload session for large files         |
+| `delete-attachment`                | Remove a file attachment                         |
 
 ### Linked Resources (2 tools)
 
-| Tool | Description |
-|---|---|
-| `get-linked-resources` | Get linked resources for a task |
+| Tool                     | Description                                                 |
+| ------------------------ | ----------------------------------------------------------- |
+| `get-linked-resources`   | Get linked resources for a task                             |
 | `create-linked-resource` | Link an external resource (URL, app, external ID) to a task |
 
 ### Bulk Operations (3 tools)
 
-| Tool | Description |
-|---|---|
-| `archive-completed-tasks` | Move completed tasks older than N days to an archive list (supports dry-run) |
-| `reorganize-list` | Restructure flat tasks into category tasks with checklist items (supports dry-run and idempotency checks) |
+| Tool                      | Description                                                                                               |
+| ------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `archive-completed-tasks` | Move completed tasks older than N days to an archive list (supports dry-run)                              |
+| `reorganize-list`         | Restructure flat tasks into category tasks with checklist items (supports dry-run and idempotency checks) |
 
 ## Architecture
 
@@ -262,6 +262,7 @@ src/
 ```
 
 **Key design decisions:**
+
 - **Request deduplication**: In-flight cache prevents duplicate API calls when MCP tools are double-invoked
 - **401 auto-retry**: Transparent token refresh on authentication failures
 - **Recurring task handling**: Temporarily clears recurrence before date updates to work around Graph API limitations

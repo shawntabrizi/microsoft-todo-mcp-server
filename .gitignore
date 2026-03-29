@@ -19,8 +19,9 @@ dist/
 .env.test.local
 .env.production.local
 
-# Tokens file (contains sensitive authentication data)
+# Tokens and config files (contain sensitive authentication data)
 tokens.json
+mcp.json
 
 # Editor directories and files
 .idea/
@@ -32,3 +33,4 @@ tokens.json
 *.sw?
 .DS_Store
 
+*.tgz

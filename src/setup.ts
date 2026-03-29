@@ -98,7 +98,7 @@ REDIRECT_URI=http://localhost:${process.env.AUTH_PORT || "3000"}/callback
         mkdirSync(configDir, { recursive: true })
 
         // Save to proper location
-        writeFileSync(tokenPath, JSON.stringify(enhancedTokens, null, 2))
+        writeFileSync(tokenPath, JSON.stringify(enhancedTokens, null, 2), { mode: 0o600 })
 
         console.log(`\n📁 Tokens saved to: ${tokenPath}`)
 
@@ -150,10 +150,17 @@ async function updateClaudeConfig() {
       config.mcpServers = {}
     }
 
+    const configDir =
+      process.platform === "win32"
+        ? join(process.env.APPDATA || join(homedir(), "AppData", "Roaming"), "microsoft-todo-mcp")
+        : join(homedir(), ".config", "microsoft-todo-mcp")
+
     config.mcpServers["microsoft-todo"] = {
       command: "npx",
       args: ["microsoft-todo-mcp-server"],
-      env: {}, // No need for tokens in env anymore!
+      env: {
+        MSTODO_TOKEN_FILE: join(configDir, "tokens.json"),
+      },
     }
 
     writeFileSync(claudeConfigPath, JSON.stringify(config, null, 2))

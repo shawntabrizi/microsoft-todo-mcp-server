@@ -1,5 +1,6 @@
 // Authentication server for Microsoft Todo MCP service
 import dotenv from "dotenv"
+import crypto from "crypto"
 import express, { Request, Response } from "express"
 import fs from "fs"
 import { join, dirname } from "path"
@@ -30,6 +31,7 @@ const __dirname = dirname(__filename)
 const app = express()
 const port = parseInt(process.env.AUTH_PORT || "3000")
 const TOKEN_FILE_PATH = join(process.cwd(), "tokens.json")
+let oauthState: string | null = null
 
 // Determine the tenant ID to use:
 // - 'common' for both organization accounts and personal accounts
@@ -62,20 +64,12 @@ const msalConfig: Configuration = {
   system: {
     loggerOptions: {
       loggerCallback(loglevel: LogLevel, message: string, containsPii: boolean) {
-        console.log(`MSAL Log: ${message}`)
+        if (!containsPii) {
+          console.error(`MSAL: ${message}`)
+        }
       },
-      piiLoggingEnabled: true,
-      logLevel: LogLevel.Verbose,
-    },
-  },
-  cache: {
-    cachePlugin: {
-      beforeCacheAccess: async (cacheContext) => {
-        console.log("Cache access requested:", cacheContext)
-      },
-      afterCacheAccess: async (cacheContext) => {
-        console.log("Cache access completed:", cacheContext)
-      },
+      piiLoggingEnabled: false,
+      logLevel: LogLevel.Warning,
     },
   },
 }
@@ -170,7 +164,7 @@ app.get("/refresh", async (req: Request, res: Response) => {
       }
 
       // Save updated token data
-      fs.writeFileSync(TOKEN_FILE_PATH, JSON.stringify(tokenData, null, 2), "utf8")
+      fs.writeFileSync(TOKEN_FILE_PATH, JSON.stringify(tokenData, null, 2), { encoding: "utf8", mode: 0o600 })
 
       res.json({
         success: true,
@@ -305,19 +299,14 @@ app.get("/", (req: Request, res: Response) => {
 // Setup the actual auth route
 app.get("/auth", (req: Request, res: Response) => {
   console.log("Auth route accessed, generating auth URL...")
+  oauthState = crypto.randomBytes(32).toString("hex")
   const authCodeUrlParameters = {
     scopes: scopes,
     redirectUri: process.env.REDIRECT_URI || `http://localhost:${port}/callback`,
-    prompt: "consent", // Use only consent to force refresh token
-    responseMode: "query" as any,
-  }
-
-  console.log("Auth parameters:", {
-    scopes: scopes,
-    redirectUri: process.env.REDIRECT_URI || `http://localhost:${port}/callback`,
     prompt: "consent",
-    responseMode: "query",
-  })
+    responseMode: "query" as any,
+    state: oauthState,
+  }
 
   cca
     .getAuthCodeUrl(authCodeUrlParameters)
@@ -333,24 +322,23 @@ app.get("/auth", (req: Request, res: Response) => {
 
 // Handle the callback from Microsoft login
 app.get("/callback", async (req: Request, res: Response) => {
-  console.log("Callback route accessed")
-  console.log("Query parameters:", {
-    code: req.query.code ? "Present (hidden)" : "Missing",
-    state: req.query.state ? "Present" : "Missing",
-    error: req.query.error || "None",
-    error_description: req.query.error_description || "None",
-  })
+  // Verify CSRF state parameter
+  if (!oauthState || req.query.state !== oauthState) {
+    res.status(403).send("Invalid OAuth state parameter. Please restart the authentication flow.")
+    return
+  }
+  oauthState = null // Consume the state (one-time use)
+
+  if (req.query.error) {
+    res.status(400).send(`Authentication error: ${req.query.error_description || req.query.error}`)
+    return
+  }
 
   const tokenRequest = {
     code: req.query.code as string,
     scopes: scopes,
     redirectUri: process.env.REDIRECT_URI || `http://localhost:${port}/callback`,
   }
-
-  console.log("Token request parameters:", {
-    scopes: scopes,
-    redirectUri: process.env.REDIRECT_URI || `http://localhost:${port}/callback`,
-  })
 
   try {
     const response = await cca.acquireTokenByCode(tokenRequest)
@@ -426,11 +414,7 @@ app.get("/callback", async (req: Request, res: Response) => {
     const expiresInSeconds = (response as any).expiresIn || 3600
     const expiresAt = Date.now() + expiresInSeconds * 1000 - 5 * 60 * 1000
 
-    console.log("Token expiration details:", {
-      expiresInSeconds,
-      expiresAt: new Date(expiresAt).toLocaleString(),
-      currentTime: new Date().toLocaleString(),
-    })
+    console.log(`Token expires at: ${new Date(expiresAt).toLocaleString()}`)
 
     // Store tokens with client credentials for future refreshes
     const tokenData = {
@@ -445,19 +429,10 @@ app.get("/callback", async (req: Request, res: Response) => {
       tenantId: tenantId,
     }
 
-    fs.writeFileSync(TOKEN_FILE_PATH, JSON.stringify(tokenData, null, 2), "utf8")
+    fs.writeFileSync(TOKEN_FILE_PATH, JSON.stringify(tokenData, null, 2), { encoding: "utf8", mode: 0o600 })
 
     console.log("Authentication successful! Token saved to:", TOKEN_FILE_PATH)
     console.log("Refresh token obtained:", refreshToken ? "Yes" : "No")
-
-    // Format token display with safety checks
-    const accessTokenDisplay = response.accessToken
-      ? `${response.accessToken.substring(0, 15)}...${response.accessToken.substring(response.accessToken.length - 5)}`
-      : "Not provided"
-
-    const refreshTokenDisplay = refreshToken
-      ? `${refreshToken.substring(0, 10)}...${refreshToken.substring(refreshToken.length - 5)}`
-      : "Not provided"
 
     // Check if the account is a personal account
     const isPersonalAccount =
@@ -505,26 +480,11 @@ app.get("/callback", async (req: Request, res: Response) => {
           <div class="token-details">
             <h3>Token Details:</h3>
             <ul>
-              <li>Access Token: ${accessTokenDisplay}</li>
-              <li>Refresh Token: ${refreshTokenDisplay}</li>
-              <li>Token Type: ${response.tokenType || "Not provided"}</li>
+              <li>Refresh Token: ${refreshToken ? "Obtained" : "Not obtained"}</li>
               <li>Scopes: ${response.scopes ? response.scopes.join(", ") : "Not provided"}</li>
               <li>Expires: ${new Date(expiresAt).toLocaleString()}</li>
+              <li>Saved to: ${TOKEN_FILE_PATH}</li>
             </ul>
-          </div>
-          
-          <div class="debug-info">
-            <h3>Debug Information:</h3>
-            <pre>${JSON.stringify(
-              {
-                hasRefreshToken: !!refreshToken,
-                tokenType: response.tokenType,
-                scopes: response.scopes,
-                cacheHasRefreshTokens: cacheJson.RefreshTokens && Object.keys(cacheJson.RefreshTokens).length > 0,
-              },
-              null,
-              2,
-            )}</pre>
           </div>
         </div>
       </body>
@@ -543,7 +503,7 @@ app.get("/callback", async (req: Request, res: Response) => {
 })
 
 // Start the server
-app.listen(port, () => {
+app.listen(port, "127.0.0.1", () => {
   console.log(`Auth server running at http://localhost:${port}`)
   console.log("Open your browser and navigate to the URL above to authenticate.")
   console.log(`Or try http://localhost:${port}/test to verify the server is running.`)
