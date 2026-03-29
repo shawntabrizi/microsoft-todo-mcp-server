@@ -267,12 +267,24 @@ pnpm run format        # Format code with Prettier
 
 ```
 src/
-  todo-index.ts        # Core MCP server with all 36 tools
-  cli.ts               # CLI entry point with token loading
-  token-manager.ts     # Token storage, refresh, and JWT decoding
-  auth-server.ts       # Express OAuth 2.0 server
-  create-mcp-config.ts # MCP config file generator
-  setup.ts             # Interactive setup wizard
+  todo-index.ts          # Server setup, imports and registers all tools
+  graph-client.ts        # Graph API HTTP client, dedup cache, auth helpers
+  types.ts               # TypeScript interfaces and Zod schemas
+  helpers.ts             # Date math, recurrence logic, formatTask
+  token-manager.ts       # Token storage, refresh, and JWT decoding
+  cli.ts                 # CLI entry point with token loading
+  auth-server.ts         # Express OAuth 2.0 server
+  create-mcp-config.ts   # MCP config file generator
+  setup.ts               # Interactive setup wizard
+  tools/
+    auth.ts              # auth-status, refresh-auth-token
+    task-lists.ts        # Task list CRUD + delta
+    tasks.ts             # Task CRUD + delta + move + skip-to-current
+    checklist-items.ts   # Checklist item CRUD
+    linked-resources.ts  # Linked resource CRUD
+    attachments.ts       # File attachment CRUD + upload sessions
+    convenience.ts       # complete-task, search-tasks, get-todays-tasks
+    bulk.ts              # archive-completed-tasks, reorganize-list
 ```
 
 **Key design decisions:**
