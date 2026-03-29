@@ -44,7 +44,7 @@ async function setup() {
     console.log("\nSteps:")
     console.log("1. Go to https://portal.azure.com")
     console.log("2. Navigate to 'App registrations' and create a new registration")
-    console.log("3. Set redirect URI to: http://localhost:3000/callback")
+    console.log(`3. Set redirect URI to: http://localhost:${process.env.AUTH_PORT || "3000"}/callback`)
     console.log("4. Add these API permissions: Tasks.Read, Tasks.ReadWrite, User.Read")
     console.log("5. Create a client secret\n")
 
@@ -56,7 +56,7 @@ async function setup() {
     const envContent = `CLIENT_ID=${clientId}
 CLIENT_SECRET=${clientSecret}
 TENANT_ID=${tenantId}
-REDIRECT_URI=http://localhost:3000/callback
+REDIRECT_URI=http://localhost:${process.env.AUTH_PORT || "3000"}/callback
 `
     writeFileSync(".env", envContent)
     console.log("✅ Created .env file")

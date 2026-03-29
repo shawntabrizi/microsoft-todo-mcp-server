@@ -42,7 +42,16 @@
     "microsoft-todo",
     "todo"
   ],
-  "author": "Jordan Burke <jordan.burke@gmail.com>",
+  "author": "Shawn Tabrizi",
+  "contributors": [
+    "Jordan Burke <jordan.burke@gmail.com>",
+    "Mcp20091",
+    "steven-pribilinskiy",
+    "commit21",
+    "vavdb",
+    "jleaders",
+    "ThePlasmak"
+  ],
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/shawntabrizi/microsoft-todo-mcp-server/issues"

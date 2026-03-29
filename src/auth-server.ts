@@ -21,7 +21,7 @@ console.log(
   "TENANT_ID:",
   process.env.TENANT_ID ? process.env.TENANT_ID : 'Not specified, using "organizations" (multi-tenant)',
 )
-console.log("REDIRECT_URI:", process.env.REDIRECT_URI || `http://localhost:3000/callback`)
+console.log("REDIRECT_URI:", process.env.REDIRECT_URI || `http://localhost:${process.env.AUTH_PORT || "3000"}/callback`)
 
 // Get current file directory in ESM
 const __filename = fileURLToPath(import.meta.url)
@@ -546,5 +546,5 @@ app.get("/callback", async (req: Request, res: Response) => {
 app.listen(port, () => {
   console.log(`Auth server running at http://localhost:${port}`)
   console.log("Open your browser and navigate to the URL above to authenticate.")
-  console.log("Or try http://localhost:3000/test to verify the server is running.")
+  console.log(`Or try http://localhost:${port}/test to verify the server is running.`)
 })
