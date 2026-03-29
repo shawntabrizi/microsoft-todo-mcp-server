@@ -105,8 +105,14 @@ export function register(server: McpServer) {
       dueBefore: z.string().optional().describe("Filter tasks due before this date (ISO format, e.g. 2024-12-31)"),
       dueAfter: z.string().optional().describe("Filter tasks due after this date (ISO format, e.g. 2024-01-01)"),
       includeCompleted: z.boolean().optional().describe("Include completed tasks in results (default: false)"),
+      linkedApp: z
+        .string()
+        .optional()
+        .describe(
+          "Filter to tasks with a linked resource from this application name (case-insensitive, e.g. 'Ninety')",
+        ),
     },
-    async ({ keyword, status, importance, dueBefore, dueAfter, includeCompleted = false }) => {
+    async ({ keyword, status, importance, dueBefore, dueAfter, includeCompleted = false, linkedApp }) => {
       try {
         const token = await getAccessToken()
         if (!token) {
@@ -123,12 +129,14 @@ export function register(server: McpServer) {
 
           const queryParams = new URLSearchParams()
           if (filters.length > 0) queryParams.append("$filter", filters.join(" and "))
+          // Expand linkedResources when filtering by app name
+          if (linkedApp) queryParams.append("$expand", "linkedResources")
 
           const queryString = queryParams.toString()
           return `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks${queryString ? "?" + queryString : ""}`
         })
 
-        // Client-side filters (OData doesn't support contains on title for To Do)
+        // Client-side filters (OData doesn't support contains on title or linked resource filtering)
         const filtered = allTaskEntries.filter(({ task }) => {
           if (keyword && !task.title.toLowerCase().includes(keyword.toLowerCase())) return false
 
@@ -139,6 +147,16 @@ export function register(server: McpServer) {
             if (task.dueDateTime.dateTime.slice(0, 10) < dueAfter.slice(0, 10)) return false
           }
           if ((dueBefore || dueAfter) && !task.dueDateTime) return false
+
+          if (linkedApp) {
+            if (!task.linkedResources || task.linkedResources.length === 0) return false
+            const appLower = linkedApp.toLowerCase()
+            const hasMatch = task.linkedResources.some(
+              (r) =>
+                r.applicationName?.toLowerCase().includes(appLower) || r.displayName?.toLowerCase().includes(appLower),
+            )
+            if (!hasMatch) return false
+          }
 
           return true
         })
