@@ -332,6 +332,7 @@ interface Task {
   }
   categories?: string[]
   linkedResources?: LinkedResource[]
+  checklistItems?: ChecklistItem[]
 }
 
 interface ChecklistItem {
@@ -830,6 +831,13 @@ function formatTask(task: Task): string {
     taskInfo += `\nDescription: ${task.body.content}`
   }
 
+  if (task.checklistItems && task.checklistItems.length > 0) {
+    const checklistSummary = task.checklistItems
+      .map((item) => `  ${item.isChecked ? "✓" : "○"} ${item.displayName}`)
+      .join("\n")
+    taskInfo += `\nChecklist (${task.checklistItems.filter((i) => i.isChecked).length}/${task.checklistItems.length}):\n${checklistSummary}`
+  }
+
   return `${taskInfo}\n---`
 }
 
@@ -1268,8 +1276,8 @@ server.tool(
       if (top !== undefined) queryParams.append("$top", top.toString())
       if (skip !== undefined) queryParams.append("$skip", skip.toString())
       if (count !== undefined) queryParams.append("$count", count.toString())
-      // Include linked resources by default since they're a navigation property
-      if (!queryParams.has("$expand")) queryParams.append("$expand", "linkedResources")
+      // Include navigation properties by default
+      if (!queryParams.has("$expand")) queryParams.append("$expand", "linkedResources,checklistItems")
 
       const queryString = queryParams.toString()
       const url = `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks${queryString ? "?" + queryString : ""}`
@@ -1326,8 +1334,8 @@ server.tool(
 
       const queryParams = new URLSearchParams()
       if (select) queryParams.append("$select", select)
-      // Include linked resources by default since they're a navigation property
-      queryParams.append("$expand", "linkedResources")
+      // Include navigation properties by default
+      queryParams.append("$expand", "linkedResources,checklistItems")
 
       const queryString = queryParams.toString()
       const url = `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}${queryString ? "?" + queryString : ""}`
