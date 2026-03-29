@@ -1,6 +1,6 @@
 // src/token-manager.ts
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
-import { join } from "path"
+import { dirname, join } from "path"
 import { homedir } from "os"
 
 interface TokenData {
@@ -15,82 +15,157 @@ interface StoredTokenData extends TokenData {
   tenantId?: string
 }
 
+function decodeJwtExpiry(accessToken: string): number | null {
+  try {
+    const parts = accessToken.split(".")
+    if (parts.length !== 3) return null
+
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as { exp?: number }
+    if (!payload.exp) return null
+
+    return payload.exp * 1000
+  } catch {
+    return null
+  }
+}
+
+function getDefaultConfigDir(): string {
+  return process.platform === "win32"
+    ? join(process.env.APPDATA || join(homedir(), "AppData", "Roaming"), "microsoft-todo-mcp")
+    : join(homedir(), ".config", "microsoft-todo-mcp")
+}
+
 export class TokenManager {
   private tokenFilePath: string
   private currentTokens: StoredTokenData | null = null
+  private configuredTokenFilePath?: string
 
   constructor() {
-    // Store tokens in a consistent location across platforms
-    const configDir =
-      process.platform === "win32"
-        ? join(process.env.APPDATA || join(homedir(), "AppData", "Roaming"), "microsoft-todo-mcp")
-        : join(homedir(), ".config", "microsoft-todo-mcp")
+    this.tokenFilePath = this.resolveTokenFilePath()
+  }
 
-    // Create directory if it doesn't exist
+  private resolveTokenFilePath(): string {
+    const configuredPath = this.configuredTokenFilePath || process.env.MSTODO_TOKEN_FILE
+    if (configuredPath) {
+      return configuredPath
+    }
+
+    const configDir = getDefaultConfigDir()
     if (!existsSync(configDir)) {
       mkdirSync(configDir, { recursive: true })
     }
 
-    this.tokenFilePath = join(configDir, "tokens.json")
+    return join(configDir, "tokens.json")
+  }
+
+  configure(options?: { tokenFilePath?: string }): void {
+    if (options?.tokenFilePath) {
+      this.configuredTokenFilePath = options.tokenFilePath
+    }
+
+    const nextTokenFilePath = this.resolveTokenFilePath()
+    this.tokenFilePath = nextTokenFilePath
+
+    const tokenDir = dirname(nextTokenFilePath)
+    if (!existsSync(tokenDir)) {
+      mkdirSync(tokenDir, { recursive: true })
+    }
+
     console.error(`Token file path: ${this.tokenFilePath}`)
   }
 
+  getTokenFilePath(): string {
+    this.configure()
+    return this.tokenFilePath
+  }
+
+  private buildEnvTokens(): StoredTokenData | null {
+    if (!process.env.MS_TODO_ACCESS_TOKEN || !process.env.MS_TODO_REFRESH_TOKEN) {
+      return null
+    }
+
+    const expiresAt = decodeJwtExpiry(process.env.MS_TODO_ACCESS_TOKEN) ?? 0
+
+    return {
+      accessToken: process.env.MS_TODO_ACCESS_TOKEN,
+      refreshToken: process.env.MS_TODO_REFRESH_TOKEN,
+      expiresAt,
+      clientId: process.env.CLIENT_ID,
+      clientSecret: process.env.CLIENT_SECRET,
+      tenantId: process.env.TENANT_ID,
+    }
+  }
+
+  private readStoredTokens(pathToRead: string): StoredTokenData | null {
+    if (!existsSync(pathToRead)) {
+      return null
+    }
+
+    try {
+      const data = readFileSync(pathToRead, "utf8")
+      return JSON.parse(data) as StoredTokenData
+    } catch (error) {
+      console.error(`Error reading token file ${pathToRead}:`, error)
+      return null
+    }
+  }
+
   // Try to get tokens from multiple sources
-  async getTokens(): Promise<TokenData | null> {
-    // 1. Check environment variables first (for backward compatibility)
-    if (process.env.MS_TODO_ACCESS_TOKEN && process.env.MS_TODO_REFRESH_TOKEN) {
-      const envTokens: TokenData = {
-        accessToken: process.env.MS_TODO_ACCESS_TOKEN,
-        refreshToken: process.env.MS_TODO_REFRESH_TOKEN,
-        expiresAt: Date.now() + 3600 * 1000, // Assume 1 hour if not specified
+  async getTokens(options?: { forceRefresh?: boolean }): Promise<TokenData | null> {
+    this.configure()
+    const forceRefresh = options?.forceRefresh === true
+
+    // 1. Prefer the configured token file when using repo-local/file-based auth.
+    const fileTokens = this.readStoredTokens(this.tokenFilePath)
+    if (fileTokens) {
+      this.currentTokens = fileTokens
+
+      if (forceRefresh || Date.now() > fileTokens.expiresAt) {
+        const refreshed = await this.refreshToken(fileTokens.refreshToken)
+        if (refreshed) {
+          return refreshed
+        }
       }
 
-      // Check if expired
-      if (Date.now() > envTokens.expiresAt) {
-        // Try to refresh
+      if (!forceRefresh) {
+        return fileTokens
+      }
+    }
+
+    // 2. Check environment variables for backward compatibility.
+    const envTokens = this.buildEnvTokens()
+    if (envTokens) {
+      this.currentTokens = envTokens
+
+      if (forceRefresh || Date.now() > envTokens.expiresAt) {
         const refreshed = await this.refreshToken(envTokens.refreshToken)
         if (refreshed) {
           return refreshed
         }
       }
-      return envTokens
-    }
 
-    // 2. Check stored token file
-    if (existsSync(this.tokenFilePath)) {
-      try {
-        const data = readFileSync(this.tokenFilePath, "utf8")
-        this.currentTokens = JSON.parse(data)
-
-        if (this.currentTokens) {
-          // Check if expired
-          if (Date.now() > this.currentTokens.expiresAt) {
-            // Try to refresh
-            const refreshed = await this.refreshToken(this.currentTokens.refreshToken)
-            if (refreshed) {
-              return refreshed
-            }
-          }
-          return this.currentTokens
-        }
-      } catch (error) {
-        console.error("Error reading token file:", error)
+      if (!forceRefresh && envTokens.expiresAt > Date.now()) {
+        return envTokens
       }
     }
 
     // 3. Check legacy token file location
     const legacyPath = join(process.cwd(), "tokens.json")
-    if (existsSync(legacyPath)) {
-      try {
-        const data = readFileSync(legacyPath, "utf8")
-        const tokens = JSON.parse(data)
+    const legacyTokens = this.readStoredTokens(legacyPath)
+    if (legacyTokens) {
+      this.currentTokens = legacyTokens
 
-        // Migrate to new location
-        this.saveTokens(tokens)
+      if (forceRefresh || Date.now() > legacyTokens.expiresAt) {
+        const refreshed = await this.refreshToken(legacyTokens.refreshToken)
+        if (refreshed) {
+          return refreshed
+        }
+      }
 
-        return tokens
-      } catch (error) {
-        console.error("Error reading legacy token file:", error)
+      this.saveTokens(legacyTokens)
+
+      if (!forceRefresh) {
+        return legacyTokens
       }
     }
 
@@ -167,7 +242,7 @@ export class TokenManager {
   }
 
   // Update Claude config automatically
-  async updateClaudeConfig(tokens: TokenData): Promise<void> {
+  async updateClaudeConfig(_tokens: TokenData): Promise<void> {
     try {
       const claudeConfigPath =
         process.platform === "win32"
@@ -182,15 +257,21 @@ export class TokenManager {
 
       const config = JSON.parse(readFileSync(claudeConfigPath, "utf8"))
 
-      // Update the microsoft-todo server config
-      if (config.mcpServers && config.mcpServers["microsoft-todo"]) {
-        config.mcpServers["microsoft-todo"].env = {
-          ...config.mcpServers["microsoft-todo"].env,
-          MS_TODO_ACCESS_TOKEN: tokens.accessToken,
-          MS_TODO_REFRESH_TOKEN: tokens.refreshToken,
+      if (config.mcpServers) {
+        for (const serverName of ["microsoftTodo", "microsoft-todo"]) {
+          if (config.mcpServers[serverName]) {
+            const serverEnv = {
+              ...(config.mcpServers[serverName].env || {}),
+              MSTODO_TOKEN_FILE: this.tokenFilePath,
+            }
+
+            delete serverEnv.MS_TODO_ACCESS_TOKEN
+            delete serverEnv.MS_TODO_REFRESH_TOKEN
+
+            config.mcpServers[serverName].env = serverEnv
+          }
         }
 
-        // Write back the updated config
         writeFileSync(claudeConfigPath, JSON.stringify(config, null, 2), "utf8")
         console.error("Updated Claude config with new tokens")
       }
@@ -209,7 +290,7 @@ Your Microsoft To Do tokens have expired and could not be refreshed.
 To fix this:
 1. Open a new terminal
 2. Navigate to the microsoft-todo-mcp-server directory
-3. Run: pnpm run auth
+3. Run: pnpm run setup
 4. Complete the authentication in your browser
 5. Restart Claude Desktop to use the new tokens
 
