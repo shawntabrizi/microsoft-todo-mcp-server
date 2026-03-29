@@ -38,8 +38,14 @@ export function register(server: McpServer) {
       top: z.number().optional().describe("Maximum number of tasks to retrieve"),
       skip: z.number().optional().describe("Number of tasks to skip"),
       count: z.boolean().optional().describe("Whether to include a count of tasks"),
+      expand: z
+        .string()
+        .optional()
+        .describe(
+          "Comma-separated navigation properties to expand (e.g., 'linkedResources,checklistItems'). Default: linkedResources",
+        ),
     },
-    async ({ listId, filter, select, orderby, top, skip, count }) => {
+    async ({ listId, filter, select, orderby, top, skip, count, expand }) => {
       try {
         const token = await getAccessToken()
         if (!token) {
@@ -56,8 +62,7 @@ export function register(server: McpServer) {
         if (top !== undefined) queryParams.append("$top", top.toString())
         if (skip !== undefined) queryParams.append("$skip", skip.toString())
         if (count !== undefined) queryParams.append("$count", count.toString())
-        // Include navigation properties by default
-        if (!queryParams.has("$expand")) queryParams.append("$expand", "linkedResources,checklistItems")
+        queryParams.append("$expand", expand || "linkedResources")
 
         const queryString = queryParams.toString()
         const url = `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks${queryString ? "?" + queryString : ""}`
@@ -102,8 +107,14 @@ export function register(server: McpServer) {
       listId: z.string().describe("ID of the task list"),
       taskId: z.string().describe("ID of the task"),
       select: z.string().optional().describe("Comma-separated list of properties to include"),
+      expand: z
+        .string()
+        .optional()
+        .describe(
+          "Comma-separated navigation properties to expand (e.g., 'linkedResources,checklistItems'). Default: linkedResources,checklistItems",
+        ),
     },
-    async ({ listId, taskId, select }) => {
+    async ({ listId, taskId, select, expand }) => {
       try {
         const token = await getAccessToken()
         if (!token) {
@@ -114,8 +125,7 @@ export function register(server: McpServer) {
 
         const queryParams = new URLSearchParams()
         if (select) queryParams.append("$select", select)
-        // Include navigation properties by default
-        queryParams.append("$expand", "linkedResources,checklistItems")
+        queryParams.append("$expand", expand || "linkedResources,checklistItems")
 
         const queryString = queryParams.toString()
         const url = `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks/${taskId}${queryString ? "?" + queryString : ""}`

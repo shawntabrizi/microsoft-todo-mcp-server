@@ -4,8 +4,54 @@ import { makeGraphRequest, getAccessToken, MS_GRAPH_BASE } from "../graph-client
 import { formatTask } from "../helpers.js"
 import type { Task, TaskList } from "../types.js"
 
+// Fetch all pages of a paginated Graph API response
+async function fetchAllPages<T>(url: string, token: string): Promise<{ items: T[]; errors: string[] }> {
+  const items: T[] = []
+  const errors: string[] = []
+  let nextUrl: string | undefined = url
+
+  while (nextUrl) {
+    const response = await makeGraphRequest<{ value: T[]; "@odata.nextLink"?: string }>(nextUrl, token)
+    if (!response) {
+      errors.push(nextUrl)
+      break
+    }
+    items.push(...(response.value || []))
+    nextUrl = response["@odata.nextLink"]
+  }
+
+  return { items, errors }
+}
+
+// Fetch all tasks from all lists, with pagination and error tracking
+async function fetchTasksAcrossLists(
+  token: string,
+  buildTaskUrl: (listId: string) => string,
+): Promise<{ results: { listName: string; task: Task }[]; warnings: string[] }> {
+  const warnings: string[] = []
+
+  const { items: lists, errors: listErrors } = await fetchAllPages<TaskList>(`${MS_GRAPH_BASE}/me/todo/lists`, token)
+  if (listErrors.length > 0) {
+    warnings.push("Failed to fetch some task list pages")
+  }
+
+  const results: { listName: string; task: Task }[] = []
+
+  for (const list of lists) {
+    const url = buildTaskUrl(list.id)
+    const { items: tasks, errors: taskErrors } = await fetchAllPages<Task>(url, token)
+    if (taskErrors.length > 0) {
+      warnings.push(`Failed to fetch some tasks from list "${list.displayName}"`)
+    }
+    for (const task of tasks) {
+      results.push({ listName: list.displayName, task })
+    }
+  }
+
+  return { results, warnings }
+}
+
 export function register(server: McpServer) {
-  // Convenience tools
   server.tool(
     "complete-task",
     "Mark a task as completed. A shortcut for update-task with status 'completed'.",
@@ -69,18 +115,7 @@ export function register(server: McpServer) {
           }
         }
 
-        // Get all lists
-        const listsResponse = await makeGraphRequest<{ value: TaskList[] }>(`${MS_GRAPH_BASE}/me/todo/lists`, token)
-        if (!listsResponse) {
-          return {
-            content: [{ type: "text", text: "Failed to retrieve task lists" }],
-          }
-        }
-
-        const allResults: { listName: string; task: Task }[] = []
-
-        for (const list of listsResponse.value || []) {
-          // Build OData filter
+        const { results: allTaskEntries, warnings } = await fetchTasksAcrossLists(token, (listId) => {
           const filters: string[] = []
           if (status) filters.push(`status eq '${status}'`)
           if (!includeCompleted && !status) filters.push("status ne 'completed'")
@@ -88,44 +123,41 @@ export function register(server: McpServer) {
 
           const queryParams = new URLSearchParams()
           if (filters.length > 0) queryParams.append("$filter", filters.join(" and "))
-          queryParams.append("$expand", "linkedResources,checklistItems")
 
           const queryString = queryParams.toString()
-          const url = `${MS_GRAPH_BASE}/me/todo/lists/${list.id}/tasks${queryString ? "?" + queryString : ""}`
+          return `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks${queryString ? "?" + queryString : ""}`
+        })
 
-          const tasksResponse = await makeGraphRequest<{ value: Task[] }>(url, token)
-          if (!tasksResponse) continue
+        // Client-side filters (OData doesn't support contains on title for To Do)
+        const filtered = allTaskEntries.filter(({ task }) => {
+          if (keyword && !task.title.toLowerCase().includes(keyword.toLowerCase())) return false
 
-          for (const task of tasksResponse.value || []) {
-            // Client-side keyword filter (OData doesn't support contains on title for To Do)
-            if (keyword && !task.title.toLowerCase().includes(keyword.toLowerCase())) continue
-
-            // Client-side date range filters
-            if (dueBefore && task.dueDateTime) {
-              const dueDate = task.dueDateTime.dateTime.slice(0, 10)
-              if (dueDate > dueBefore.slice(0, 10)) continue
-            }
-            if (dueAfter && task.dueDateTime) {
-              const dueDate = task.dueDateTime.dateTime.slice(0, 10)
-              if (dueDate < dueAfter.slice(0, 10)) continue
-            }
-            // If filtering by date range, skip tasks without due dates
-            if ((dueBefore || dueAfter) && !task.dueDateTime) continue
-
-            allResults.push({ listName: list.displayName, task })
+          if (dueBefore && task.dueDateTime) {
+            if (task.dueDateTime.dateTime.slice(0, 10) > dueBefore.slice(0, 10)) return false
           }
+          if (dueAfter && task.dueDateTime) {
+            if (task.dueDateTime.dateTime.slice(0, 10) < dueAfter.slice(0, 10)) return false
+          }
+          if ((dueBefore || dueAfter) && !task.dueDateTime) return false
+
+          return true
+        })
+
+        let warningText = ""
+        if (warnings.length > 0) {
+          warningText = `\n\nWarnings (results may be incomplete):\n${warnings.map((w) => `- ${w}`).join("\n")}`
         }
 
-        if (allResults.length === 0) {
+        if (filtered.length === 0) {
           return {
-            content: [{ type: "text", text: "No tasks found matching your criteria." }],
+            content: [{ type: "text", text: `No tasks found matching your criteria.${warningText}` }],
           }
         }
 
-        const formatted = allResults.map(({ listName, task }) => `[${listName}]\n${formatTask(task)}`).join("\n")
+        const formatted = filtered.map(({ listName, task }) => `[${listName}]\n${formatTask(task)}`).join("\n")
 
         return {
-          content: [{ type: "text", text: `Found ${allResults.length} task(s):\n\n${formatted}` }],
+          content: [{ type: "text", text: `Found ${filtered.length} task(s):\n\n${formatted}${warningText}` }],
         }
       } catch (error) {
         return {
@@ -137,7 +169,7 @@ export function register(server: McpServer) {
 
   server.tool(
     "get-todays-tasks",
-    "Get all tasks due today or overdue across all lists. Provides a unified daily view of what needs attention.",
+    "Get all tasks due today or overdue across all lists. Provides a unified daily view of what needs attention. Uses local system time for date comparison.",
     {
       includeOverdue: z.boolean().optional().describe("Include overdue tasks (default: true)"),
       includeNoDueDate: z.boolean().optional().describe("Include tasks with no due date (default: false)"),
@@ -151,44 +183,34 @@ export function register(server: McpServer) {
           }
         }
 
+        // Use local time, not UTC, so "today" matches the user's perspective
         const today = new Date()
-        const todayStr = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, "0")}-${String(today.getUTCDate()).padStart(2, "0")}`
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
 
-        const listsResponse = await makeGraphRequest<{ value: TaskList[] }>(`${MS_GRAPH_BASE}/me/todo/lists`, token)
-        if (!listsResponse) {
-          return {
-            content: [{ type: "text", text: "Failed to retrieve task lists" }],
-          }
-        }
+        const { results: allTaskEntries, warnings } = await fetchTasksAcrossLists(token, (listId) => {
+          const queryParams = new URLSearchParams()
+          queryParams.append("$filter", "status ne 'completed'")
+          return `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks?${queryParams.toString()}`
+        })
 
         const todayTasks: { listName: string; task: Task }[] = []
         const overdueTasks: { listName: string; task: Task }[] = []
         const noDueDateTasks: { listName: string; task: Task }[] = []
 
-        for (const list of listsResponse.value || []) {
-          const queryParams = new URLSearchParams()
-          queryParams.append("$filter", "status ne 'completed'")
-          queryParams.append("$expand", "linkedResources,checklistItems")
-
-          const url = `${MS_GRAPH_BASE}/me/todo/lists/${list.id}/tasks?${queryParams.toString()}`
-          const tasksResponse = await makeGraphRequest<{ value: Task[] }>(url, token)
-          if (!tasksResponse) continue
-
-          for (const task of tasksResponse.value || []) {
-            if (!task.dueDateTime) {
-              if (includeNoDueDate) {
-                noDueDateTasks.push({ listName: list.displayName, task })
-              }
-              continue
+        for (const { listName, task } of allTaskEntries) {
+          if (!task.dueDateTime) {
+            if (includeNoDueDate) {
+              noDueDateTasks.push({ listName, task })
             }
+            continue
+          }
 
-            const dueDate = task.dueDateTime.dateTime.slice(0, 10)
+          const dueDate = task.dueDateTime.dateTime.slice(0, 10)
 
-            if (dueDate === todayStr) {
-              todayTasks.push({ listName: list.displayName, task })
-            } else if (dueDate < todayStr && includeOverdue) {
-              overdueTasks.push({ listName: list.displayName, task })
-            }
+          if (dueDate === todayStr) {
+            todayTasks.push({ listName, task })
+          } else if (dueDate < todayStr && includeOverdue) {
+            overdueTasks.push({ listName, task })
           }
         }
 
@@ -212,10 +234,15 @@ export function register(server: McpServer) {
           output += "\n\n"
         }
 
+        let warningText = ""
+        if (warnings.length > 0) {
+          warningText = `\nWarnings (results may be incomplete):\n${warnings.map((w) => `- ${w}`).join("\n")}\n`
+        }
+
         if (!output) {
-          output = "No tasks due today and no overdue tasks. You're all caught up!"
+          output = `No tasks due today and no overdue tasks. You're all caught up!${warningText ? `\n${warningText}` : ""}`
         } else {
-          output = `Daily Task Summary (${todayStr})\n${"=".repeat(40)}\n\n${output}`
+          output = `Daily Task Summary (${todayStr})\n${"=".repeat(40)}\n\n${output}${warningText}`
         }
 
         return {
