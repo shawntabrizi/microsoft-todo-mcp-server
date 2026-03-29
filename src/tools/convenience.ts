@@ -27,14 +27,16 @@ async function fetchAllPages<T>(url: string, token: string): Promise<{ items: T[
 async function fetchTasksAcrossLists(
   token: string,
   buildTaskUrl: (listId: string) => string,
+  listFilter?: (list: TaskList) => boolean,
 ): Promise<{ results: { listName: string; task: Task }[]; warnings: string[] }> {
   const warnings: string[] = []
 
-  const { items: lists, errors: listErrors } = await fetchAllPages<TaskList>(`${MS_GRAPH_BASE}/me/todo/lists`, token)
+  const { items: allLists, errors: listErrors } = await fetchAllPages<TaskList>(`${MS_GRAPH_BASE}/me/todo/lists`, token)
   if (listErrors.length > 0) {
     warnings.push("Failed to fetch some task list pages")
   }
 
+  const lists = listFilter ? allLists.filter(listFilter) : allLists
   const results: { listName: string; task: Task }[] = []
 
   for (const list of lists) {
@@ -94,9 +96,13 @@ export function register(server: McpServer) {
 
   server.tool(
     "search-tasks",
-    "Search for tasks across all lists by keyword, status, importance, or due date range. Returns matching tasks with their list names.",
+    "Search for tasks across all lists by keyword, status, importance, due date range, category, linked app, or list name. Returns matching tasks with their list names.",
     {
       keyword: z.string().optional().describe("Search keyword to match in task titles (case-insensitive)"),
+      bodyKeyword: z
+        .string()
+        .optional()
+        .describe("Search keyword to match in task body/description (case-insensitive)"),
       status: z
         .enum(["notStarted", "inProgress", "completed", "waitingOnOthers", "deferred"])
         .optional()
@@ -111,8 +117,21 @@ export function register(server: McpServer) {
         .describe(
           "Filter to tasks with a linked resource from this application name (case-insensitive, e.g. 'Ninety')",
         ),
+      category: z.string().optional().describe("Filter to tasks with this category (case-insensitive)"),
+      listName: z.string().optional().describe("Filter to a specific list by name (case-insensitive, partial match)"),
     },
-    async ({ keyword, status, importance, dueBefore, dueAfter, includeCompleted = false, linkedApp }) => {
+    async ({
+      keyword,
+      bodyKeyword,
+      status,
+      importance,
+      dueBefore,
+      dueAfter,
+      includeCompleted = false,
+      linkedApp,
+      category,
+      listName,
+    }) => {
       try {
         const token = await getAccessToken()
         if (!token) {
@@ -121,24 +140,33 @@ export function register(server: McpServer) {
           }
         }
 
-        const { results: allTaskEntries, warnings } = await fetchTasksAcrossLists(token, (listId) => {
-          const filters: string[] = []
-          if (status) filters.push(`status eq '${status}'`)
-          if (!includeCompleted && !status) filters.push("status ne 'completed'")
-          if (importance) filters.push(`importance eq '${importance}'`)
+        const { results: allTaskEntries, warnings } = await fetchTasksAcrossLists(
+          token,
+          (listId) => {
+            const filters: string[] = []
+            if (status) filters.push(`status eq '${status}'`)
+            if (!includeCompleted && !status) filters.push("status ne 'completed'")
+            if (importance) filters.push(`importance eq '${importance}'`)
 
-          const queryParams = new URLSearchParams()
-          if (filters.length > 0) queryParams.append("$filter", filters.join(" and "))
-          // Expand linkedResources when filtering by app name
-          if (linkedApp) queryParams.append("$expand", "linkedResources")
+            const queryParams = new URLSearchParams()
+            if (filters.length > 0) queryParams.append("$filter", filters.join(" and "))
+            // Expand linkedResources when filtering by app name
+            if (linkedApp) queryParams.append("$expand", "linkedResources")
 
-          const queryString = queryParams.toString()
-          return `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks${queryString ? "?" + queryString : ""}`
-        })
+            const queryString = queryParams.toString()
+            return `${MS_GRAPH_BASE}/me/todo/lists/${listId}/tasks${queryString ? "?" + queryString : ""}`
+          },
+          listName ? (list) => list.displayName.toLowerCase().includes(listName.toLowerCase()) : undefined,
+        )
 
-        // Client-side filters (OData doesn't support contains on title or linked resource filtering)
+        // Client-side filters
         const filtered = allTaskEntries.filter(({ task }) => {
           if (keyword && !task.title.toLowerCase().includes(keyword.toLowerCase())) return false
+
+          if (bodyKeyword) {
+            const bodyContent = task.body?.content?.toLowerCase() || ""
+            if (!bodyContent.includes(bodyKeyword.toLowerCase())) return false
+          }
 
           if (dueBefore && task.dueDateTime) {
             if (task.dueDateTime.dateTime.slice(0, 10) > dueBefore.slice(0, 10)) return false
@@ -156,6 +184,12 @@ export function register(server: McpServer) {
                 r.applicationName?.toLowerCase().includes(appLower) || r.displayName?.toLowerCase().includes(appLower),
             )
             if (!hasMatch) return false
+          }
+
+          if (category) {
+            if (!task.categories || task.categories.length === 0) return false
+            const catLower = category.toLowerCase()
+            if (!task.categories.some((c) => c.toLowerCase().includes(catLower))) return false
           }
 
           return true
